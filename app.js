@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub - Main Application Logic
- * Descobre, filtra e traduz repositórios em alta no GitHub para Português (PT-BR)
+ * GitTrends Hub - Smart Deep Summary & Project Intelligence Engine
+ * Descobre, gera resumos detalhados em PT-BR e analisa repositórios do GitHub
  */
 
 // STATE MANAGEMENT
@@ -16,7 +16,7 @@ const state = {
   autoTranslate: true,
   githubToken: localStorage.getItem('gittrends_pat') || '',
   favorites: JSON.parse(localStorage.getItem('gittrends_favs') || '[]'),
-  translatedCache: {}, // Memory cache for PT-BR translations
+  summaryCache: {}, // Memory cache for detailed PT-BR summaries
   currentRepos: [],
   selectedRepo: null
 };
@@ -116,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // SETUP EVENT LISTENERS
 function initEventListeners() {
-  // Search input debounce
   let searchTimeout;
   dom.searchInput.addEventListener('input', (e) => {
     state.query = e.target.value.trim();
@@ -140,13 +139,11 @@ function initEventListeners() {
     fetchRepositories();
   });
 
-  // Auto-translate toggle
   dom.toggleAutoTranslate.addEventListener('change', (e) => {
     state.autoTranslate = e.target.checked;
     renderRepos(state.currentRepos);
   });
 
-  // Preset Chips
   dom.presetChips.forEach(chip => {
     chip.addEventListener('click', () => {
       dom.presetChips.forEach(c => c.classList.remove('active'));
@@ -157,7 +154,6 @@ function initEventListeners() {
     });
   });
 
-  // Filters dropdown
   dom.filterLanguage.addEventListener('change', (e) => {
     state.language = e.target.value;
     state.page = 1;
@@ -182,7 +178,6 @@ function initEventListeners() {
     fetchRepositories();
   });
 
-  // Pagination
   dom.btnPrevPage.addEventListener('click', () => {
     if (state.page > 1) {
       state.page--;
@@ -195,7 +190,6 @@ function initEventListeners() {
     fetchRepositories();
   });
 
-  // Detail Modal Events
   dom.btnCloseDetail.addEventListener('click', () => dom.detailModal.classList.add('hidden'));
   dom.detailModal.addEventListener('click', (e) => {
     if (e.target === dom.detailModal) dom.detailModal.classList.add('hidden');
@@ -203,7 +197,7 @@ function initEventListeners() {
 
   dom.btnStarDetailRepo.addEventListener('click', () => {
     if (state.selectedRepo) {
-      toggleFavorite(state.selectedRepo, dom.detailDescPt.textContent);
+      toggleFavorite(state.selectedRepo, state.summaryCache[state.selectedRepo.id]);
       updateDetailModalStarBtn();
     }
   });
@@ -211,26 +205,25 @@ function initEventListeners() {
   dom.btnCopySingleAi.addEventListener('click', () => {
     if (!state.selectedRepo) return;
     const repo = state.selectedRepo;
-    const desc = dom.detailDescPt.textContent;
-    const prompt = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias com você:
+    const summary = state.summaryCache[repo.id] || {};
+    const prompt = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento com você:
 
 ### Repositório: [${repo.full_name}](${repo.html_url})
-- **Resumo (PT-BR)**: ${desc}
-- **Linguagem**: ${repo.language || 'N/A'}
-- **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}
-- **Tópicos**: ${(repo.topics || []).slice(0, 5).join(', ')}
+📌 **O que é**: ${summary.what || repo.description}
+🎯 **Para que serve**: ${summary.purpose || 'Ferramenta especializada para desenvolvimento'}
+⚡ **Recursos Chave**: ${(summary.features || []).join(', ') || (repo.topics || []).slice(0, 5).join(', ')}
+💻 **Linguagem**: ${repo.language || 'N/A'} | ⭐ **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | 🍴 **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}
 
-**Ideias para explorarmos juntas:**
-1. Como podemos adaptar o conceito principal deste projeto para o nosso ecossistema?
-2. Quais módulos ou funcionalidades seriam mais valiosos para integrar aos nossos projetos atuais?
-3. Quais melhorias ou diferenciais poderíamos criar para lançar uma solução ainda melhor?`;
+**Análise & Próximos Passos:**
+1. Como podemos adaptar as melhores ideias deste projeto para o nosso ecossistema?
+2. Quais são os principais diferenciais que tornam esse projeto popular?
+3. Como podemos criar algo melhor ou integrar suas funcionalidades?`;
 
     navigator.clipboard.writeText(prompt).then(() => {
-      showToast('Prompt deste repositório copiado para a IA em Português!');
+      showToast('Prompt detalhado deste repositório copiado para a IA em Português!');
     });
   });
 
-  // Favorites Modal Events
   dom.btnOpenFavorites.addEventListener('click', openFavoritesModal);
   dom.btnCloseFavorites.addEventListener('click', closeFavoritesModal);
   dom.favoritesModal.addEventListener('click', (e) => {
@@ -240,7 +233,6 @@ function initEventListeners() {
   dom.btnCopyAiMarkdown.addEventListener('click', copyAiMarkdownToClipboard);
   dom.btnClearAllFavs.addEventListener('click', clearAllFavorites);
 
-  // Token Modal Events
   dom.btnTokenModal.addEventListener('click', () => dom.tokenModal.classList.remove('hidden'));
   dom.btnCloseToken.addEventListener('click', () => dom.tokenModal.classList.add('hidden'));
   dom.tokenModal.addEventListener('click', (e) => {
@@ -379,22 +371,16 @@ async function fetchRepositories() {
   }
 }
 
-// RENDER REPOSITORY CARDS
+// RENDER REPOSITORY CARDS WITH DETAILED PT-BR SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
   for (const repo of repos) {
     const isFav = state.favorites.some(f => f.id === repo.id);
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
-    
-    const rawDesc = repo.description || 'Sem descrição fornecida.';
-    let displayDesc = rawDesc;
-    let isTranslated = false;
 
-    if (state.autoTranslate && rawDesc !== 'Sem descrição fornecida.') {
-      displayDesc = await translateToPtBr(rawDesc, repo.id);
-      isTranslated = true;
-    }
+    // Generate Deep Summary in PT-BR
+    const summary = await getOrGenerateDeepSummary(repo);
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -413,9 +399,12 @@ async function renderRepos(repos) {
         </div>
 
         <div class="repo-description-box">
-          ${isTranslated ? `<span class="pt-br-badge"><i class="fa-solid fa-language"></i> Resumo PT-BR</span>` : ''}
-          <p class="repo-desc-text" id="desc-${repo.id}">${escapeHtml(displayDesc)}</p>
-          ${!state.autoTranslate ? `<button class="btn-translate-card" data-id="${repo.id}"><i class="fa-solid fa-language"></i> Traduzir para PT-BR</button>` : ''}
+          <span class="pt-br-badge"><i class="fa-solid fa-sparkles"></i> Análise Detalhada (PT-BR)</span>
+          
+          <div class="deep-summary-preview">
+            <p class="summary-line"><strong>📌 O que é:</strong> ${escapeHtml(summary.what)}</p>
+            <p class="summary-line"><strong>🎯 Para que serve:</strong> ${escapeHtml(summary.purpose)}</p>
+          </div>
         </div>
 
         <div class="repo-topics">
@@ -445,39 +434,95 @@ async function renderRepos(repos) {
 
     // Click on Card -> Open Detail Modal
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-star-repo') || e.target.closest('.btn-translate-card')) {
-        return; // don't open modal if star or translate button was clicked
-      }
-      openDetailModal(repo, displayDesc);
+      if (e.target.closest('.btn-star-repo')) return;
+      openDetailModal(repo, summary);
     });
 
     // Star Button Click Listener
     const starBtn = card.querySelector('.btn-star-repo');
     starBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      toggleFavorite(repo, displayDesc);
+      toggleFavorite(repo, summary);
     });
-
-    // Manual Translate Click Listener
-    const translateBtn = card.querySelector('.btn-translate-card');
-    if (translateBtn) {
-      translateBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        translateBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Traduzindo...';
-        const translated = await translateToPtBr(rawDesc, repo.id);
-        const descElement = card.querySelector(`#desc-${repo.id}`);
-        descElement.textContent = translated;
-        translateBtn.remove();
-        card.querySelector('.repo-description-box').insertAdjacentHTML('afterbegin', `<span class="pt-br-badge"><i class="fa-solid fa-language"></i> Resumo PT-BR</span>`);
-      });
-    }
 
     dom.repoGrid.appendChild(card);
   }
 }
 
-// OPEN REPO DETAIL MODAL WITH PROJECT IDEAS
-async function openDetailModal(repo, descPtBr) {
+// SMART DEEP SUMMARY GENERATOR ENGINE (Generates structured Portuguese explanations)
+async function getOrGenerateDeepSummary(repo) {
+  if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
+
+  const rawDesc = repo.description || '';
+  let translatedDesc = rawDesc;
+
+  // Translate raw description first if available
+  if (rawDesc.trim() !== '') {
+    try {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(rawDesc)}&langpair=en|pt-BR`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.responseData && data.responseData.translatedText) {
+          translatedDesc = data.responseData.translatedText.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+        }
+      }
+    } catch (e) {
+      console.warn('Fallback para tradução bruta');
+    }
+  }
+
+  // Deduce categories & purpose from topics + name + description
+  const topicsStr = (repo.topics || []).join(' ').toLowerCase();
+  const nameLower = repo.name.toLowerCase();
+  const descLower = rawDesc.toLowerCase();
+  const lang = repo.language || 'Software';
+
+  let category = 'Ferramenta de Software';
+  let purpose = 'Facilitar a criação e manutenção de sistemas modernos.';
+  let features = [];
+
+  if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
+    category = 'Framework / Agente de IA';
+    purpose = 'Automatizar tarefas complexas usando Inteligência Artificial e LLMs autônomos.';
+    features.push('Agentes Autônomos', 'Orquestração de LLMs', 'Automação de Fluxos');
+  } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui')) {
+    category = 'Biblioteca de Interface (UI)';
+    purpose = 'Acelerar o desenvolvimento de interfaces web elegantes e responsivas.';
+    features.push('Componentes Reutilizáveis', 'Design Moderno', 'Alta Performance');
+  } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db')) {
+    category = 'Banco de Dados / ORM';
+    purpose = 'Armazenar, consultar e gerenciar dados com segurança e alta velocidade.';
+    features.push('Persistência de Dados', 'Consultas Rápidas', 'Escalabilidade');
+  } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
+    category = 'Ferramenta de Linha de Comando (CLI)';
+    purpose = 'Aumentar a produtividade no terminal via automação e atalhos rápidos.';
+    features.push('Execução via Terminal', 'Scriptável', 'Baixo Consumo');
+  } else if (topicsStr.includes('python') || lang === 'Python') {
+    category = 'Ecossistema Python';
+    purpose = 'Oferecer pacotes e utilitários otimizados para Python.';
+    features.push('Sintaxe Limpa', 'Suporte a Scripts', 'Módulos Integrados');
+  } else if (topicsStr.includes('rust') || lang === 'Rust') {
+    category = 'Sistema de Alta Performance (Rust)';
+    purpose = 'Fornecer soluções de baixíssima latência com segurança de memória garantida.';
+    features.push('Super Rápido', 'Memory Safe', 'Compilação Nativa');
+  }
+
+  // Construct structured summary object
+  const summaryObj = {
+    what: translatedDesc || `${category} desenvolvido em ${lang}.`,
+    purpose: purpose,
+    category: category,
+    features: features.length ? features : (repo.topics || []).slice(0, 3),
+    rawTranslated: translatedDesc
+  };
+
+  state.summaryCache[repo.id] = summaryObj;
+  return summaryObj;
+}
+
+// OPEN REPO DETAIL MODAL WITH DEEP PROJECT ANALYSIS
+async function openDetailModal(repo, summary) {
   state.selectedRepo = repo;
   dom.detailOwnerAvatar.src = repo.owner.avatar_url;
   dom.detailRepoName.textContent = repo.full_name;
@@ -486,13 +531,21 @@ async function openDetailModal(repo, descPtBr) {
   dom.detailForks.textContent = repo.forks_count.toLocaleString('pt-BR');
   dom.detailIssues.textContent = repo.open_issues_count ? repo.open_issues_count.toLocaleString('pt-BR') : '0';
   dom.detailLang.textContent = repo.language || 'Geral';
-  dom.detailDescPt.textContent = descPtBr || repo.description || 'Sem descrição';
 
-  // Topics
+  // Rich HTML breakdown inside Detail Modal
+  dom.detailDescPt.innerHTML = `
+    <div class="detail-breakdown-box">
+      <p class="breakdown-item"><strong>📌 O que o projeto faz:</strong> ${escapeHtml(summary.what)}</p>
+      <p class="breakdown-item"><strong>🎯 Qual problema ele resolve:</strong> ${escapeHtml(summary.purpose)}</p>
+      <p class="breakdown-item"><strong>🛠️ Categoria &amp; Tecnologias:</strong> <span class="badge-category">${escapeHtml(summary.category)}</span> em <strong>${repo.language || 'Código Aberto'}</strong></p>
+      ${repo.license ? `<p class="breakdown-item"><strong>📜 Licença:</strong> ${repo.license.name}</p>` : ''}
+    </div>
+  `;
+
   dom.detailTopics.innerHTML = (repo.topics || []).map(t => `<span class="topic-tag">#${t}</span>`).join('');
 
-  // AI Project Ideas Generator
-  const ideas = generateProjectIdeas(repo, descPtBr);
+  // AI Project Ideas
+  const ideas = generateProjectIdeas(repo, summary);
   dom.detailIdeasContainer.innerHTML = ideas.map(idea => `
     <div class="idea-card">
       <h4><i class="${idea.icon} text-purple"></i> ${idea.title}</h4>
@@ -517,57 +570,28 @@ function updateDetailModalStarBtn() {
 }
 
 // GENERATE 3 CREATIVE PROJECT IDEAS IN PT-BR
-function generateProjectIdeas(repo, descPtBr) {
-  const name = repo.name.toLowerCase();
-  const desc = (descPtBr || repo.description || '').toLowerCase();
-  const lang = (repo.language || '').toLowerCase();
-
+function generateProjectIdeas(repo, summary) {
   return [
     {
       icon: 'fa-solid fa-plug',
-      title: '1. Integração Direta',
-      desc: `Conectar o ${repo.name} aos nossos projetos atuais como um módulo ou biblioteca para acelerar o desenvolvimento.`
+      title: '1. Integração Direta no Nosso Código',
+      desc: `Aproveitar o ${repo.name} como dependência para adicionar o recurso de "${summary.purpose}" nos nossos sistemas.`
     },
     {
       icon: 'fa-solid fa-cube',
-      title: '2. Criação de Versão SaaS / Web',
-      desc: `Criar uma interface web ou dashboard amigável em cima desta ferramenta para oferecer como produto ou utilitário.`
+      title: '2. Criar Versão SaaS / WebApp',
+      desc: `Construir um painel amigável em cima desta solução para oferecer como produto ou micro-serviço web.`
     },
     {
       icon: 'fa-solid fa-wand-magic-sparkles',
-      title: '3. Evolução Assistida por IA',
-      desc: `Usar a arquitetura deste projeto como base e adicionar novos recursos inteligentes de IA com a nossa Antigravity.`
+      title: '3. Potencializar com Agente de IA',
+      desc: `Conectar a infraestrutura deste repositório com os nossos Agentes de IA da Antigravity para automatizar o uso.`
     }
   ];
 }
 
-// CLIENT-SIDE TRANSLATION HELPER
-async function translateToPtBr(text, repoId) {
-  if (!text || text.trim() === '') return 'Sem descrição.';
-  if (state.translatedCache[repoId]) return state.translatedCache[repoId];
-
-  try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt-BR`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.responseData && data.responseData.translatedText) {
-        let result = data.responseData.translatedText;
-        result = result.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
-        state.translatedCache[repoId] = result;
-        return result;
-      }
-    }
-  } catch (err) {
-    console.warn('Erro na tradução automática:', err);
-  }
-
-  state.translatedCache[repoId] = text;
-  return text;
-}
-
 // TOGGLE FAVORITE
-function toggleFavorite(repo, descPtBr) {
+function toggleFavorite(repo, summary) {
   const index = state.favorites.findIndex(f => f.id === repo.id);
   if (index >= 0) {
     state.favorites.splice(index, 1);
@@ -578,7 +602,8 @@ function toggleFavorite(repo, descPtBr) {
       name: repo.name,
       full_name: repo.full_name,
       html_url: repo.html_url,
-      description_pt: descPtBr || repo.description,
+      summary_what: summary.what,
+      summary_purpose: summary.purpose,
       language: repo.language,
       stars: repo.stargazers_count,
       forks: repo.forks_count,
@@ -628,7 +653,8 @@ function renderFavoriteList() {
     item.innerHTML = `
       <div class="fav-item-info">
         <h4><a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name}</a> <span style="font-size:0.8rem; color:var(--accent-gold);">★ ${formatNumber(fav.stars)}</span></h4>
-        <p>${escapeHtml(fav.description_pt || 'Sem descrição')}</p>
+        <p><strong>📌 O que é:</strong> ${escapeHtml(fav.summary_what || 'Sem descrição')}</p>
+        <p><strong>🎯 Para que serve:</strong> ${escapeHtml(fav.summary_purpose || 'Utilitário de desenvolvimento')}</p>
       </div>
       <button class="btn-icon btn-remove-fav" title="Remover" style="color:#f87171;">
         <i class="fa-solid fa-trash"></i>
@@ -668,12 +694,13 @@ function generateAiMarkdown() {
     return 'Nenhum repositório marcado como interessante para exportar.';
   }
 
-  let md = `Olá Antigravity! Analisei os seguintes repositórios no GitHub e os marquei como interessantes para criarmos algo novo ou evoluirmos nossos projetos atuais:\n\n`;
+  let md = `Olá Antigravity! Analisei os seguintes repositórios no GitHub e selecionei os marcados abaixo com suas descrições detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
 
   state.favorites.forEach((fav, index) => {
     md += `### ${index + 1}. [${fav.full_name}](${fav.html_url})\n`;
-    md += `- **Resumo (PT-BR)**: ${fav.description_pt}\n`;
-    md += `- **Linguagem Principal**: ${fav.language || 'N/A'}\n`;
+    md += `- **📌 O que é**: ${fav.summary_what}\n`;
+    md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
+    md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
     md += `- **Estrelas**: ${fav.stars.toLocaleString('pt-BR')} | **Forks**: ${fav.forks.toLocaleString('pt-BR')}\n`;
     if (fav.topics && fav.topics.length > 0) {
       md += `- **Tópicos**: ${fav.topics.slice(0, 5).join(', ')}\n`;
@@ -693,7 +720,7 @@ function updateAiMarkdownPreview() {
 function copyAiMarkdownToClipboard() {
   const text = generateAiMarkdown();
   navigator.clipboard.writeText(text).then(() => {
-    showToast('Resumo em Português copiado! Cole no chat para debatermos.');
+    showToast('Resumo detalhado em Português copiado! Cole no chat para debatermos.');
   }).catch(err => {
     console.error('Erro ao copiar:', err);
     showToast('Não foi possível copiar automaticamente. Selecione o texto na caixa.');
