@@ -6,6 +6,11 @@
   <title>GitTrends Hub - Os Melhores Repositórios do GitHub em Português</title>
   <meta name="description" content="Filtre e descubra os repositórios em alta no GitHub com resumos automáticos em PT-BR e sugestões de ideias para IA.">
   
+  <!-- Cache Control Meta Tags -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +19,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2.0">
 </head>
 <body>
 
@@ -31,8 +36,8 @@
           <i class="fa-solid fa-bolt-lightning"></i>
         </div>
         <div class="brand-text">
-          <h1>GitTrends<span>Hub</span> <span class="live-pill"><span class="pulse-dot"></span> AO VIVO</span></h1>
-          <span class="tagline">Os melhores repositórios do GitHub • Traduzidos &amp; Resumidos em PT-BR</span>
+          <h1>GitTrends<span>Hub</span> <span class="live-pill"><span class="pulse-dot"></span> AO VIVO v2.0</span></h1>
+          <span class="tagline">Os melhores repositórios do GitHub • Resumos Detalhados &amp; Explicativos em PT-BR</span>
         </div>
       </div>
       
@@ -145,7 +150,7 @@
     <main class="repo-grid-container">
       <div id="loading-spinner" class="spinner-container">
         <div class="spinner"></div>
-        <p>Buscando os melhores repositórios do GitHub e traduzindo resumos para PT-BR...</p>
+        <p>Analisando repositórios e gerando resumos detalhados em Português...</p>
       </div>
 
       <div id="repo-grid" class="repo-grid"></div>
@@ -195,15 +200,13 @@
         </div>
 
         <div class="detail-section">
-          <h3><i class="fa-solid fa-align-left text-blue"></i> Descrição &amp; Resumo (PT-BR)</h3>
-          <p id="detail-desc-pt" class="detail-desc-box">Carregando resumo...</p>
+          <h3><i class="fa-solid fa-align-left text-blue"></i> Descrição &amp; Análise Completa (PT-BR)</h3>
+          <div id="detail-desc-pt" class="detail-desc-box">Carregando resumo...</div>
         </div>
 
         <div class="detail-section">
           <h3><i class="fa-solid fa-lightbulb text-gold"></i> Ideias de Projetos &amp; Aplicações</h3>
-          <div id="detail-ideas-container" class="ideas-grid">
-            <!-- Ideas injected via JS -->
-          </div>
+          <div id="detail-ideas-container" class="ideas-grid"></div>
         </div>
 
         <div class="detail-section">
@@ -246,11 +249,8 @@
           </button>
         </div>
 
-        <div id="fav-list-container" class="fav-list-container">
-          <!-- Fav items rendered here -->
-        </div>
+        <div id="fav-list-container" class="fav-list-container"></div>
 
-        <!-- Preview area for copied text -->
         <div class="markdown-preview-container">
           <label>Preview do Prompt para a IA (PT-BR):</label>
           <textarea id="ai-markdown-preview" readonly placeholder="Seus repositórios marcados aparecerão aqui formatados em Português..."></textarea>
@@ -288,6 +288,6 @@
     <i class="fa-solid fa-circle-check"></i> <span id="toast-message">Notificação</span>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.0"></script>
 </body>
 </html>

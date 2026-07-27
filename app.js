@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub - Smart Deep Summary & Project Intelligence Engine
- * Descobre, gera resumos detalhados em PT-BR e analisa repositórios do GitHub
+ * GitTrends Hub v2.0 - Rich Smart Summary Engine
+ * Resumos explicativos ultra-detalhados em PT-BR para leitura imediata no card
  */
 
 // STATE MANAGEMENT
@@ -16,7 +16,7 @@ const state = {
   autoTranslate: true,
   githubToken: localStorage.getItem('gittrends_pat') || '',
   favorites: JSON.parse(localStorage.getItem('gittrends_favs') || '[]'),
-  summaryCache: {}, // Memory cache for detailed PT-BR summaries
+  summaryCache: {},
   currentRepos: [],
   selectedRepo: null
 };
@@ -114,7 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchRepositories();
 });
 
-// SETUP EVENT LISTENERS
 function initEventListeners() {
   let searchTimeout;
   dom.searchInput.addEventListener('input', (e) => {
@@ -209,15 +208,15 @@ function initEventListeners() {
     const prompt = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento com você:
 
 ### Repositório: [${repo.full_name}](${repo.html_url})
-📌 **O que é**: ${summary.what || repo.description}
-🎯 **Para que serve**: ${summary.purpose || 'Ferramenta especializada para desenvolvimento'}
-⚡ **Recursos Chave**: ${(summary.features || []).join(', ') || (repo.topics || []).slice(0, 5).join(', ')}
+📌 **O que é**: ${summary.what}
+🎯 **Para que serve**: ${summary.purpose}
+⚡ **Diferenciais**: ${summary.whyUse}
 💻 **Linguagem**: ${repo.language || 'N/A'} | ⭐ **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | 🍴 **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}
 
 **Análise & Próximos Passos:**
-1. Como podemos adaptar as melhores ideias deste projeto para o nosso ecossistema?
-2. Quais são os principais diferenciais que tornam esse projeto popular?
-3. Como podemos criar algo melhor ou integrar suas funcionalidades?`;
+1. Como podemos adaptar o conceito deste projeto para as nossas aplicações?
+2. Quais módulos valem a pena integrarmos imediatamente?
+3. Quais diferenciais podemos criar para evoluir essa ideia?`;
 
     navigator.clipboard.writeText(prompt).then(() => {
       showToast('Prompt detalhado deste repositório copiado para a IA em Português!');
@@ -264,7 +263,6 @@ function initEventListeners() {
   });
 }
 
-// CONSTRUCT GITHUB SEARCH QUERY
 function buildQueryString() {
   const parts = [];
 
@@ -318,7 +316,6 @@ function buildQueryString() {
   return parts.join(' ');
 }
 
-// FETCH REPOSITORIES FROM GITHUB API
 async function fetchRepositories() {
   showLoading(true);
 
@@ -371,7 +368,7 @@ async function fetchRepositories() {
   }
 }
 
-// RENDER REPOSITORY CARDS WITH DETAILED PT-BR SUMMARIES
+// RENDER REPOSITORY CARDS WITH DEEP EXPLANATORY PT-BR SUMMARIES ON FRONT
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -379,8 +376,8 @@ async function renderRepos(repos) {
     const isFav = state.favorites.some(f => f.id === repo.id);
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
 
-    // Generate Deep Summary in PT-BR
-    const summary = await getOrGenerateDeepSummary(repo);
+    // Deep Summary Engine
+    const summary = await getOrGenerateRichSummary(repo);
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -398,12 +395,17 @@ async function renderRepos(repos) {
           </button>
         </div>
 
+        <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
         <div class="repo-description-box">
-          <span class="pt-br-badge"><i class="fa-solid fa-sparkles"></i> Análise Detalhada (PT-BR)</span>
-          
+          <div class="summary-badge-header">
+            <span class="pt-br-badge"><i class="fa-solid fa-file-contract"></i> Resumo Explicativo em PT-BR</span>
+            <span class="category-pill">${summary.category}</span>
+          </div>
+
           <div class="deep-summary-preview">
             <p class="summary-line"><strong>📌 O que é:</strong> ${escapeHtml(summary.what)}</p>
             <p class="summary-line"><strong>🎯 Para que serve:</strong> ${escapeHtml(summary.purpose)}</p>
+            <p class="summary-line"><strong>⚡ Por que usar:</strong> ${escapeHtml(summary.whyUse)}</p>
           </div>
         </div>
 
@@ -432,13 +434,11 @@ async function renderRepos(repos) {
       </div>
     `;
 
-    // Click on Card -> Open Detail Modal
     card.addEventListener('click', (e) => {
       if (e.target.closest('.btn-star-repo')) return;
       openDetailModal(repo, summary);
     });
 
-    // Star Button Click Listener
     const starBtn = card.querySelector('.btn-star-repo');
     starBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -449,14 +449,13 @@ async function renderRepos(repos) {
   }
 }
 
-// SMART DEEP SUMMARY GENERATOR ENGINE (Generates structured Portuguese explanations)
-async function getOrGenerateDeepSummary(repo) {
+// RICH SMART SUMMARY ENGINE (Produces 3 distinct detailed PT-BR insights)
+async function getOrGenerateRichSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
   const rawDesc = repo.description || '';
-  let translatedDesc = rawDesc;
+  let translatedDesc = '';
 
-  // Translate raw description first if available
   if (rawDesc.trim() !== '') {
     try {
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(rawDesc)}&langpair=en|pt-BR`;
@@ -468,61 +467,68 @@ async function getOrGenerateDeepSummary(repo) {
         }
       }
     } catch (e) {
-      console.warn('Fallback para tradução bruta');
+      console.warn('Fallback para síntese inteligente');
     }
   }
 
-  // Deduce categories & purpose from topics + name + description
   const topicsStr = (repo.topics || []).join(' ').toLowerCase();
   const nameLower = repo.name.toLowerCase();
-  const descLower = rawDesc.toLowerCase();
-  const lang = repo.language || 'Software';
+  const descLower = (rawDesc + ' ' + translatedDesc).toLowerCase();
+  const lang = repo.language || 'Código Aberto';
 
-  let category = 'Ferramenta de Software';
-  let purpose = 'Facilitar a criação e manutenção de sistemas modernos.';
-  let features = [];
+  let category = 'Solução de Software';
+  let purpose = 'Automatizar e otimizar processos de desenvolvimento de software.';
+  let whyUse = 'Projeto altamente ativo no GitHub com forte suporte da comunidade.';
 
+  // Deep Contextual Analysis Rules
   if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
-    category = 'Framework / Agente de IA';
-    purpose = 'Automatizar tarefas complexas usando Inteligência Artificial e LLMs autônomos.';
-    features.push('Agentes Autônomos', 'Orquestração de LLMs', 'Automação de Fluxos');
-  } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui')) {
-    category = 'Biblioteca de Interface (UI)';
-    purpose = 'Acelerar o desenvolvimento de interfaces web elegantes e responsivas.';
-    features.push('Componentes Reutilizáveis', 'Design Moderno', 'Alta Performance');
-  } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db')) {
-    category = 'Banco de Dados / ORM';
-    purpose = 'Armazenar, consultar e gerenciar dados com segurança e alta velocidade.';
-    features.push('Persistência de Dados', 'Consultas Rápidas', 'Escalabilidade');
+    category = 'Agente de IA';
+    purpose = 'Criar e executar agentes autônomos que realizam tarefas complexas usando LLMs (OpenAI, Claude, etc.).';
+    whyUse = 'Permite criar fluxos de IA sem precisar construir toda a arquitetura do zero.';
+  } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui') || topicsStr.includes('tailwind')) {
+    category = 'Biblioteca Visual (UI)';
+    purpose = 'Componentes e elementos de interface prontos para construir webapps modernos e responsivos.';
+    whyUse = 'Acelera a criação do frontend mantendo alto padrão de design e personalização.';
+  } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres')) {
+    category = 'Banco de Dados / Armazenamento';
+    purpose = 'Gerenciar, indexar e consultar grandes volumes de dados com alta eficiência.';
+    whyUse = 'Oferece alta velocidade de leitura/escrita e integração simples com o backend.';
   } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
-    category = 'Ferramenta de Linha de Comando (CLI)';
-    purpose = 'Aumentar a produtividade no terminal via automação e atalhos rápidos.';
-    features.push('Execução via Terminal', 'Scriptável', 'Baixo Consumo');
-  } else if (topicsStr.includes('python') || lang === 'Python') {
-    category = 'Ecossistema Python';
-    purpose = 'Oferecer pacotes e utilitários otimizados para Python.';
-    features.push('Sintaxe Limpa', 'Suporte a Scripts', 'Módulos Integrados');
-  } else if (topicsStr.includes('rust') || lang === 'Rust') {
-    category = 'Sistema de Alta Performance (Rust)';
-    purpose = 'Fornecer soluções de baixíssima latência com segurança de memória garantida.';
-    features.push('Super Rápido', 'Memory Safe', 'Compilação Nativa');
+    category = 'Ferramenta CLI (Terminal)';
+    purpose = 'Executar comandos rápidos no terminal para automação, build ou monitoramento.';
+    whyUse = 'Reduz trabalho manual repetitivo no fluxo diário do desenvolvedor.';
+  } else if (topicsStr.includes('scraper') || topicsStr.includes('crawler') || nameLower.includes('scrape')) {
+    category = 'Extrator de Dados (Scraper)';
+    purpose = 'Extrair e estruturar informações automaticamente de páginas web e APIs.';
+    whyUse = 'Captura dados da internet de forma rápida lidando com bloqueios e paginação.';
+  } else if (lang === 'Python') {
+    category = 'Ferramenta Python';
+    purpose = 'Módulos e utilitários de alta performance desenvolvidos em Python.';
+    whyUse = 'Fácil de instalar (`pip install`) e simples de integrar em qualquer projeto.';
+  } else if (lang === 'TypeScript' || lang === 'JavaScript') {
+    category = 'Pacote JS / TS';
+    purpose = 'Solução pronta para o ecossistema Web e Node.js.';
+    whyUse = 'Possui tipagem estática pronta e suporte total aos frameworks modernos (React, Next.js).';
+  } else if (lang === 'Rust') {
+    category = 'Motor em Rust (Baixa Latência)';
+    purpose = 'Software de altíssima velocidade e consumo mínimo de memória.';
+    whyUse = 'Garante performance extrema para sistemas críticos que exigem resposta imediata.';
   }
 
-  // Construct structured summary object
+  const whatText = translatedDesc || `${category} desenvolvido em ${lang} com mais de ${repo.stargazers_count.toLocaleString('pt-BR')} estrelas no GitHub.`;
+
   const summaryObj = {
-    what: translatedDesc || `${category} desenvolvido em ${lang}.`,
+    what: whatText,
     purpose: purpose,
-    category: category,
-    features: features.length ? features : (repo.topics || []).slice(0, 3),
-    rawTranslated: translatedDesc
+    whyUse: whyUse,
+    category: category
   };
 
   state.summaryCache[repo.id] = summaryObj;
   return summaryObj;
 }
 
-// OPEN REPO DETAIL MODAL WITH DEEP PROJECT ANALYSIS
-async function openDetailModal(repo, summary) {
+function openDetailModal(repo, summary) {
   state.selectedRepo = repo;
   dom.detailOwnerAvatar.src = repo.owner.avatar_url;
   dom.detailRepoName.textContent = repo.full_name;
@@ -532,19 +538,17 @@ async function openDetailModal(repo, summary) {
   dom.detailIssues.textContent = repo.open_issues_count ? repo.open_issues_count.toLocaleString('pt-BR') : '0';
   dom.detailLang.textContent = repo.language || 'Geral';
 
-  // Rich HTML breakdown inside Detail Modal
   dom.detailDescPt.innerHTML = `
     <div class="detail-breakdown-box">
       <p class="breakdown-item"><strong>📌 O que o projeto faz:</strong> ${escapeHtml(summary.what)}</p>
       <p class="breakdown-item"><strong>🎯 Qual problema ele resolve:</strong> ${escapeHtml(summary.purpose)}</p>
-      <p class="breakdown-item"><strong>🛠️ Categoria &amp; Tecnologias:</strong> <span class="badge-category">${escapeHtml(summary.category)}</span> em <strong>${repo.language || 'Código Aberto'}</strong></p>
-      ${repo.license ? `<p class="breakdown-item"><strong>📜 Licença:</strong> ${repo.license.name}</p>` : ''}
+      <p class="breakdown-item"><strong>⚡ Por que ele vale a pena:</strong> ${escapeHtml(summary.whyUse)}</p>
+      <p class="breakdown-item"><strong>🛠️ Categoria:</strong> <span class="badge-category">${escapeHtml(summary.category)}</span> | Linguagem: <strong>${repo.language || 'Código Aberto'}</strong></p>
     </div>
   `;
 
   dom.detailTopics.innerHTML = (repo.topics || []).map(t => `<span class="topic-tag">#${t}</span>`).join('');
 
-  // AI Project Ideas
   const ideas = generateProjectIdeas(repo, summary);
   dom.detailIdeasContainer.innerHTML = ideas.map(idea => `
     <div class="idea-card">
@@ -569,28 +573,26 @@ function updateDetailModalStarBtn() {
   }
 }
 
-// GENERATE 3 CREATIVE PROJECT IDEAS IN PT-BR
 function generateProjectIdeas(repo, summary) {
   return [
     {
       icon: 'fa-solid fa-plug',
-      title: '1. Integração Direta no Nosso Código',
-      desc: `Aproveitar o ${repo.name} como dependência para adicionar o recurso de "${summary.purpose}" nos nossos sistemas.`
+      title: '1. Módulo para os Nossos Projetos',
+      desc: `Integrar a funcionalidade de "${summary.purpose}" como um módulo nos nossos códigos atuais.`
     },
     {
       icon: 'fa-solid fa-cube',
-      title: '2. Criar Versão SaaS / WebApp',
-      desc: `Construir um painel amigável em cima desta solução para oferecer como produto ou micro-serviço web.`
+      title: '2. Criar Produto / SaaS',
+      desc: `Desenvolver um painel web amigável por cima deste repositório para vender ou liberar como serviço.`
     },
     {
       icon: 'fa-solid fa-wand-magic-sparkles',
-      title: '3. Potencializar com Agente de IA',
-      desc: `Conectar a infraestrutura deste repositório com os nossos Agentes de IA da Antigravity para automatizar o uso.`
+      title: '3. Automação com a IA Antigravity',
+      desc: `Conectar os recursos deste repositório com o nosso assistente de IA para operar em segundo plano.`
     }
   ];
 }
 
-// TOGGLE FAVORITE
 function toggleFavorite(repo, summary) {
   const index = state.favorites.findIndex(f => f.id === repo.id);
   if (index >= 0) {
@@ -604,6 +606,7 @@ function toggleFavorite(repo, summary) {
       html_url: repo.html_url,
       summary_what: summary.what,
       summary_purpose: summary.purpose,
+      summary_why: summary.whyUse,
       language: repo.language,
       stars: repo.stargazers_count,
       forks: repo.forks_count,
@@ -617,12 +620,10 @@ function toggleFavorite(repo, summary) {
   renderRepos(state.currentRepos);
 }
 
-// UPDATE FAVORITE BADGE
 function updateFavBadge() {
   dom.favCountBadge.textContent = state.favorites.length;
 }
 
-// OPEN FAVORITES MODAL
 function openFavoritesModal() {
   renderFavoriteList();
   updateAiMarkdownPreview();
@@ -633,7 +634,6 @@ function closeFavoritesModal() {
   dom.favoritesModal.classList.add('hidden');
 }
 
-// RENDER FAVORITES IN MODAL
 function renderFavoriteList() {
   dom.favListContainer.innerHTML = '';
 
@@ -674,7 +674,6 @@ function renderFavoriteList() {
   });
 }
 
-// CLEAR ALL FAVORITES
 function clearAllFavorites() {
   if (state.favorites.length === 0) return;
   if (confirm('Tem certeza que deseja remover todos os repositórios marcados?')) {
@@ -688,18 +687,18 @@ function clearAllFavorites() {
   }
 }
 
-// GENERATE & COPY AI MARKDOWN PROMPT IN PT-BR
 function generateAiMarkdown() {
   if (state.favorites.length === 0) {
     return 'Nenhum repositório marcado como interessante para exportar.';
   }
 
-  let md = `Olá Antigravity! Analisei os seguintes repositórios no GitHub e selecionei os marcados abaixo com suas descrições detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
+  let md = `Olá Antigravity! Analisei os seguintes repositórios no GitHub e selecionei os marcados abaixo com suas análises detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
 
   state.favorites.forEach((fav, index) => {
     md += `### ${index + 1}. [${fav.full_name}](${fav.html_url})\n`;
     md += `- **📌 O que é**: ${fav.summary_what}\n`;
     md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
+    md += `- **⚡ Por que usar**: ${fav.summary_why || 'Alta popularidade no GitHub'}\n`;
     md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
     md += `- **Estrelas**: ${fav.stars.toLocaleString('pt-BR')} | **Forks**: ${fav.forks.toLocaleString('pt-BR')}\n`;
     if (fav.topics && fav.topics.length > 0) {
@@ -727,7 +726,6 @@ function copyAiMarkdownToClipboard() {
   });
 }
 
-// UTILITY FUNCTIONS
 function showLoading(isLoading) {
   if (isLoading) {
     dom.loadingSpinner.classList.remove('hidden');
