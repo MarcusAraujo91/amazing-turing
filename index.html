@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitTrends Hub - Os Melhores Repositórios do GitHub em Português</title>
+  <meta name="description" content="Filtre e descubra os repositórios em alta no GitHub com resumos automáticos em PT-BR e sugestões de ideias para IA.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Ambient Radar Glow Background -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <div class="app-container">
+    
+    <!-- HEADER -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">
+          <i class="fa-solid fa-bolt-lightning"></i>
+        </div>
+        <div class="brand-text">
+          <h1>GitTrends<span>Hub</span> <span class="live-pill"><span class="pulse-dot"></span> AO VIVO</span></h1>
+          <span class="tagline">Os melhores repositórios do GitHub • Traduzidos &amp; Resumidos em PT-BR</span>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <button id="btn-token-modal" class="btn btn-outline" title="Configurar Token GitHub (Para evitar limite de busca)">
+          <i class="fa-solid fa-key"></i>
+          <span class="btn-text">Token GitHub</span>
+        </button>
+        
+        <button id="btn-open-favorites" class="btn btn-primary">
+          <i class="fa-solid fa-star text-gold"></i>
+          <span>Marcados</span>
+          <span id="fav-count-badge" class="badge-count">0</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTROL PANEL / FILTERS -->
+    <section class="control-panel">
+      <!-- Search & Presets Bar -->
+      <div class="search-section">
+        <div class="search-bar-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" id="search-input" placeholder="Pesquisar por tecnologia, nome ou tópico (ex: agent, rag, nextjs, scraper)..." />
+          <button id="btn-clear-search" class="btn-icon hidden" title="Limpar busca">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
+        <div class="auto-translate-toggle">
+          <label class="switch-label" title="Traduzir automaticamente todas as descrições dos repositórios para Português (PT-BR)">
+            <input type="checkbox" id="toggle-auto-translate" checked />
+            <span class="slider"></span>
+            <span class="toggle-text"><i class="fa-solid fa-language"></i> Traduzir para PT-BR</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Quick Presets Chips -->
+      <div class="preset-chips">
+        <span class="preset-label"><i class="fa-solid fa-fire"></i> Categorias:</span>
+        <button class="chip active" data-preset="trending-today">🔥 Bombando Hoje</button>
+        <button class="chip" data-preset="trending-week">⭐ Em Alta na Semana</button>
+        <button class="chip" data-preset="new-stars">✨ Novos Repositórios (&lt;30 dias)</button>
+        <button class="chip" data-preset="ai-agents">🤖 IA &amp; Agentes</button>
+        <button class="chip" data-preset="frontend-tools">🎨 Frontend &amp; Web</button>
+        <button class="chip" data-preset="dev-tools">🛠️ Dev Tools &amp; CLI</button>
+        <button class="chip" data-preset="backend-db">🗄️ Backend &amp; DB</button>
+      </div>
+
+      <!-- Advanced Filters Row -->
+      <div class="filter-controls-row">
+        <div class="filter-group">
+          <label for="filter-language"><i class="fa-solid fa-code"></i> Linguagem</label>
+          <select id="filter-language">
+            <option value="">Todas as Linguagens</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="python">Python</option>
+            <option value="rust">Rust</option>
+            <option value="go">Go</option>
+            <option value="cpp">C++</option>
+            <option value="java">Java</option>
+            <option value="html">HTML/CSS</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-stars"><i class="fa-solid fa-star"></i> Mínimo de Estrelas</label>
+          <select id="filter-stars">
+            <option value="0">Qualquer quantidade</option>
+            <option value="100" selected>≥ 100 estrelas</option>
+            <option value="500">≥ 500 estrelas</option>
+            <option value="1000">≥ 1.000 estrelas</option>
+            <option value="5000">≥ 5.000 estrelas</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-period"><i class="fa-regular fa-calendar"></i> Criado nos últimos</label>
+          <select id="filter-period">
+            <option value="all">Todo o período</option>
+            <option value="7">7 dias</option>
+            <option value="30" selected>30 dias</option>
+            <option value="90">90 dias</option>
+            <option value="365">1 ano</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-sort"><i class="fa-solid fa-arrow-down-wide-short"></i> Ordenar por</label>
+          <select id="filter-sort">
+            <option value="stars" selected>Estrelas (Mais Populares)</option>
+            <option value="forks">Forks (Mais Modificados)</option>
+            <option value="updated">Atualizados Recentemente</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATUS BAR / METRICS -->
+    <div class="status-bar">
+      <div id="results-count" class="results-count">Carregando repositórios...</div>
+      <div class="rate-limit-info" id="rate-limit-info" title="Limite de requisições à API pública do GitHub">
+        <i class="fa-solid fa-network-wired"></i> API GitHub: <span id="rate-limit-remaining">--</span>/60 req/h
+      </div>
+    </div>
+
+    <!-- REPOSITORY GRID -->
+    <main class="repo-grid-container">
+      <div id="loading-spinner" class="spinner-container">
+        <div class="spinner"></div>
+        <p>Buscando os melhores repositórios do GitHub e traduzindo resumos para PT-BR...</p>
+      </div>
+
+      <div id="repo-grid" class="repo-grid"></div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <i class="fa-solid fa-folder-open"></i>
+        <h3>Nenhum repositório encontrado</h3>
+        <p>Tente ajustar os filtros acima ou buscar por outros termos.</p>
+      </div>
+    </main>
+
+    <!-- PAGINATION -->
+    <footer class="pagination-footer">
+      <button id="btn-prev-page" class="btn btn-secondary" disabled>
+        <i class="fa-solid fa-chevron-left"></i> Anterior
+      </button>
+      <span id="page-indicator">Página 1</span>
+      <button id="btn-next-page" class="btn btn-secondary">
+        Próxima <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </footer>
+
+  </div>
+
+  <!-- REPO DETAIL MODAL -->
+  <div id="detail-modal" class="modal-backdrop hidden">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <div class="detail-header-info">
+          <img id="detail-owner-avatar" src="" alt="Owner" class="owner-avatar-lg" />
+          <div>
+            <h2 id="detail-repo-name">Nome do Repositório</h2>
+            <a id="detail-repo-link" href="#" target="_blank" class="detail-github-link">
+              <i class="fa-brands fa-github"></i> Abrir no GitHub <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </div>
+        <button id="btn-close-detail" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="detail-metrics-row">
+          <div class="metric-card"><i class="fa-solid fa-star text-gold"></i> <span id="detail-stars">0</span> <span>Estrelas</span></div>
+          <div class="metric-card"><i class="fa-solid fa-code-fork text-blue"></i> <span id="detail-forks">0</span> <span>Forks</span></div>
+          <div class="metric-card"><i class="fa-solid fa-circle-dot text-green"></i> <span id="detail-issues">0</span> <span>Issues Abertas</span></div>
+          <div class="metric-card"><i class="fa-solid fa-code text-purple"></i> <span id="detail-lang">N/A</span> <span>Linguagem</span></div>
+        </div>
+
+        <div class="detail-section">
+          <h3><i class="fa-solid fa-align-left text-blue"></i> Descrição &amp; Resumo (PT-BR)</h3>
+          <p id="detail-desc-pt" class="detail-desc-box">Carregando resumo...</p>
+        </div>
+
+        <div class="detail-section">
+          <h3><i class="fa-solid fa-lightbulb text-gold"></i> Ideias de Projetos &amp; Aplicações</h3>
+          <div id="detail-ideas-container" class="ideas-grid">
+            <!-- Ideas injected via JS -->
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h3><i class="fa-solid fa-tags"></i> Tópicos &amp; Tags</h3>
+          <div id="detail-topics" class="repo-topics"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-star-detail-repo" class="btn btn-primary">
+          <i class="fa-solid fa-star"></i> <span id="btn-star-detail-text">Marcar como Interessante</span>
+        </button>
+        <button id="btn-copy-single-ai" class="btn btn-gradient">
+          <i class="fa-solid fa-robot"></i> Copiar Ideias para a IA (Antigravity)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAVORITES & AI EXPORT DRAWER / MODAL -->
+  <div id="favorites-modal" class="modal-backdrop hidden">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-star text-gold"></i> Repositórios Marcados como Interessantes</h2>
+        <button id="btn-close-favorites" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="modal-body">
+        <p class="modal-subtitle">
+          Estes são os repositórios que você salvou. Você pode copiar o resumo formatado em Português para me enviar no chat e criarmos algo novo ou evoluirmos projetos existentes!
+        </p>
+
+        <div class="modal-actions-bar">
+          <button id="btn-copy-ai-markdown" class="btn btn-gradient">
+            <i class="fa-solid fa-robot"></i> Copiar Resumo Completo para a IA (Antigravity)
+          </button>
+          
+          <button id="btn-clear-all-favs" class="btn btn-danger-outline">
+            <i class="fa-solid fa-trash-can"></i> Limpar Todos
+          </button>
+        </div>
+
+        <div id="fav-list-container" class="fav-list-container">
+          <!-- Fav items rendered here -->
+        </div>
+
+        <!-- Preview area for copied text -->
+        <div class="markdown-preview-container">
+          <label>Preview do Prompt para a IA (PT-BR):</label>
+          <textarea id="ai-markdown-preview" readonly placeholder="Seus repositórios marcados aparecerão aqui formatados em Português..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GITHUB TOKEN MODAL -->
+  <div id="token-modal" class="modal-backdrop hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-key text-blue"></i> Configurar Token do GitHub</h2>
+        <button id="btn-close-token" class="btn-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          A API pública não autenticada do GitHub permite até 60 buscas/hora. Adicionar um Personal Access Token (PAT) aumenta seu limite para <strong>5.000 requisições/hora</strong>.
+        </p>
+        <div class="input-group">
+          <label for="github-token-input">GitHub Personal Access Token (PAT):</label>
+          <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
+        </div>
+        <p class="small-text text-muted">Seu token fica salvo exclusivamente no <code>localStorage</code> do seu navegador de forma segura.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-token" class="btn btn-primary">Salvar Token</button>
+        <button id="btn-remove-token" class="btn btn-outline">Remover Token</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast hidden">
+    <i class="fa-solid fa-circle-check"></i> <span id="toast-message">Notificação</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
