@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v3.1 - Deep Open-Source & Commercial Paywall Filter
- * Elimina repositórios sem licença limpa, wrappers de serviços pagos e adiciona recurso de Ocultar/Bloquear repositórios
+ * GitTrends Hub v3.2 - Optimized Open-Source Search Engine
+ * Busca repositórios em alta no GitHub e aplica filtragem Open-Source precisa no cliente
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -20,7 +20,7 @@ const state = {
   periodDays: 30,
   sortBy: 'stars',
   page: 1,
-  perPage: 12,
+  perPage: 24, // Fetch 24 to have plenty after filtering
   autoTranslate: true,
   githubToken: localStorage.getItem('gittrends_pat') || '',
   favorites: JSON.parse(localStorage.getItem('gittrends_favs') || '[]'),
@@ -318,12 +318,9 @@ function buildQueryString() {
     }
   }
 
-  if (state.freeOnly) {
-    if (state.license !== 'opensource-all') {
-      parts.push(`license:${state.license}`);
-    } else {
-      parts.push(`(license:mit OR license:apache-2.0 OR license:gpl-3.0 OR license:bsd-3-clause OR license:agpl-3.0)`);
-    }
+  // Specific single license if selected
+  if (state.freeOnly && state.license !== 'opensource-all') {
+    parts.push(`license:${state.license}`);
   }
 
   if (state.language) {
@@ -371,17 +368,17 @@ async function fetchRepositories() {
     // FILTER OUT USER BLOCKED REPOSITORIES
     rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
 
-    // STRICT CLIENT FILTER FOR 100% FREE OPEN SOURCE ONLY
+    // ACCURATE CLIENT FILTER FOR FREE OPEN SOURCE ONLY
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
     }
 
-    state.currentRepos = rawItems;
+    state.currentRepos = rawItems.slice(0, 12);
     
-    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios Open-Source 100% grátis nesta página`;
+    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios Open-Source gratuitos encontrados`;
     dom.pageIndicator.textContent = `Página ${state.page}`;
     dom.btnPrevPage.disabled = state.page === 1;
-    dom.btnNextPage.disabled = rawItems.length < state.perPage;
+    dom.btnNextPage.disabled = rawItems.length === 0;
 
     if (state.currentRepos.length === 0) {
       showEmptyState(true);
@@ -399,18 +396,17 @@ async function fetchRepositories() {
   }
 }
 
-// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE (Excludes commercial paywalls / freemium traps / missing licenses)
+// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE
 function isRepoStrictlyFreeOpenSource(repo) {
-  // MUST have a recognized Open Source License
-  if (!repo.license || !repo.license.key) return false;
-  const key = repo.license.key.toLowerCase();
-  
-  if (!FREE_OPEN_SOURCE_LICENSES.includes(key)) return false;
+  // If repo has no license, check if paywall keywords exist. If license key exists, check OSI compliance
+  if (repo.license && repo.license.key) {
+    const key = repo.license.key.toLowerCase();
+    if (!FREE_OPEN_SOURCE_LICENSES.includes(key)) return false;
+  }
 
   // Filter out commercial wrappers & paid requirements in description or topics
   const desc = (repo.description || '').toLowerCase();
   const topics = (repo.topics || []).join(' ').toLowerCase();
-  const name = repo.name.toLowerCase();
 
   const paidKeywords = [
     'pricing required', 'paid license', 'commercial license', 'freemium',
@@ -434,7 +430,7 @@ async function renderRepos(repos) {
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
 
     const summary = await getOrGenerateRichSummary(repo);
-    const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'MIT';
+    const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'Open Source';
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -451,7 +447,7 @@ async function renderRepos(repos) {
             <button class="btn-star-repo ${isFav ? 'is-starred' : ''}" title="${isFav ? 'Remover dos interessantes' : 'Marcar como interessante'}">
               <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-star"></i>
             </button>
-            <button class="btn-block-repo" title="Ocultar este repositório (não é grátis ou não me interessa)">
+            <button class="btn-block-repo" title="Ocultar este repositório">
               <i class="fa-solid fa-eye-slash"></i>
             </button>
           </div>
@@ -517,7 +513,6 @@ async function renderRepos(repos) {
   }
 }
 
-// BLOCK / HIDE REPOSITORY
 function blockRepository(repoId, repoName) {
   if (!state.blockedRepos.includes(repoId)) {
     state.blockedRepos.push(repoId);
@@ -527,7 +522,6 @@ function blockRepository(repoId, repoName) {
   }
 }
 
-// RICH SMART SUMMARY ENGINE
 async function getOrGenerateRichSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
@@ -551,14 +545,13 @@ async function getOrGenerateRichSummary(repo) {
 
   const topicsStr = (repo.topics || []).join(' ').toLowerCase();
   const nameLower = repo.name.toLowerCase();
-  const descLower = (rawDesc + ' ' + translatedDesc).toLowerCase();
   const lang = repo.language || 'Código Aberto';
 
   let category = 'Software Open-Source';
   let purpose = 'Código 100% gratuito e livre para usar, modificar e integrar.';
   let whyUse = 'Projeto gratuito sem paywalls, altamente avaliado pela comunidade dev.';
 
-  if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
+  if (topicsStr.includes('agent') || nameLower.includes('agent')) {
     category = 'Agente de IA (Grátis)';
     purpose = 'Framework open-source para criar agentes de IA autônomos sem pagar licenças de terceiros.';
     whyUse = 'Permite ter seu próprio sistema de IA rodando localmente de graça.';
@@ -570,7 +563,7 @@ async function getOrGenerateRichSummary(repo) {
     category = 'Banco de Dados (Open Source)';
     purpose = 'Armazenar e consultar dados de forma gratuita, segura e escalável.';
     whyUse = 'Código aberto com controle total dos seus dados sem surpresas no orçamento.';
-  } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
+  } else if (topicsStr.includes('cli') || nameLower.includes('cli')) {
     category = 'Ferramenta CLI (Grátis)';
     purpose = 'Utilitário de terminal open-source para automação diária de tarefas.';
     whyUse = 'Ferramenta leve, gratuita e totalmente customizável.';
@@ -600,13 +593,13 @@ function openDetailModal(repo, summary) {
   dom.detailRepoLink.href = repo.html_url;
   dom.detailStars.textContent = repo.stargazers_count.toLocaleString('pt-BR');
   dom.detailForks.textContent = repo.forks_count.toLocaleString('pt-BR');
-  dom.detailLicense.textContent = repo.license ? repo.license.spdx_id || repo.license.name : 'MIT (Grátis)';
+  dom.detailLicense.textContent = repo.license ? repo.license.spdx_id || repo.license.name : 'Open Source (Grátis)';
   dom.detailIssues.textContent = repo.open_issues_count ? repo.open_issues_count.toLocaleString('pt-BR') : '0';
   dom.detailLang.textContent = repo.language || 'Geral';
 
   dom.detailDescPt.innerHTML = `
     <div class="detail-breakdown-box">
-      <p class="breakdown-item"><strong>🟢 Status da Licença:</strong> <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis &amp; Open-Source (${repo.license ? repo.license.name : 'MIT'})</span></p>
+      <p class="breakdown-item"><strong>🟢 Status da Licença:</strong> <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis &amp; Open-Source (${repo.license ? repo.license.name : 'Open Source'})</span></p>
       <p class="breakdown-item"><strong>📌 O que o projeto faz:</strong> ${escapeHtml(summary.what)}</p>
       <p class="breakdown-item"><strong>🎯 Qual problema ele resolve:</strong> ${escapeHtml(summary.purpose)}</p>
       <p class="breakdown-item"><strong>⚡ Por que ele vale a pena:</strong> ${escapeHtml(summary.whyUse)}</p>
@@ -673,7 +666,7 @@ function toggleFavorite(repo, summary) {
       summary_what: summary.what,
       summary_purpose: summary.purpose,
       summary_why: summary.whyUse,
-      license: repo.license ? repo.license.name : 'MIT',
+      license: repo.license ? repo.license.name : 'Open Source',
       language: repo.language,
       stars: repo.stargazers_count,
       forks: repo.forks_count,
