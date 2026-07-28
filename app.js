@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v3.2 - Optimized Open-Source Search Engine
- * Busca repositórios em alta no GitHub e aplica filtragem Open-Source precisa no cliente
+ * GitTrends Hub v3.3 - Individual Prompt Exporter & Open-Source Engine
+ * Suporte a cópia de prompts individuais dentro do modal de marcados
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -20,7 +20,7 @@ const state = {
   periodDays: 30,
   sortBy: 'stars',
   page: 1,
-  perPage: 24, // Fetch 24 to have plenty after filtering
+  perPage: 24,
   autoTranslate: true,
   githubToken: localStorage.getItem('gittrends_pat') || '',
   favorites: JSON.parse(localStorage.getItem('gittrends_favs') || '[]'),
@@ -223,19 +223,7 @@ function initEventListeners() {
     if (!state.selectedRepo) return;
     const repo = state.selectedRepo;
     const summary = state.summaryCache[repo.id] || {};
-    const prompt = `Olá Antigravity! Analisei este repositório Open-Source no GitHub e gostaria de debater ideias de desenvolvimento com você:
-
-### Repositório Open-Source: [${repo.full_name}](${repo.html_url})
-📜 **Licença**: ${repo.license ? repo.license.name : 'MIT'} (100% Grátis)
-📌 **O que é**: ${summary.what}
-🎯 **Para que serve**: ${summary.purpose}
-⚡ **Por que usar**: ${summary.whyUse}
-💻 **Linguagem**: ${repo.language || 'N/A'} | ⭐ **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | 🍴 **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}
-
-**Análise & Próximos Passos:**
-1. Como podemos utilizar este código open-source gratuito nos nossos projetos?
-2. Quais módulos valem a pena integrarmos imediatamente?
-3. Quais diferenciais podemos criar para evoluir essa solução?`;
+    const prompt = generateSingleRepoAiMarkdown(repo, summary);
 
     navigator.clipboard.writeText(prompt).then(() => {
       showToast('Prompt deste repositório Open-Source copiado em Português!');
@@ -318,7 +306,6 @@ function buildQueryString() {
     }
   }
 
-  // Specific single license if selected
   if (state.freeOnly && state.license !== 'opensource-all') {
     parts.push(`license:${state.license}`);
   }
@@ -365,10 +352,8 @@ async function fetchRepositories() {
     const data = await response.json();
     let rawItems = data.items || [];
 
-    // FILTER OUT USER BLOCKED REPOSITORIES
     rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
 
-    // ACCURATE CLIENT FILTER FOR FREE OPEN SOURCE ONLY
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
     }
@@ -396,15 +381,12 @@ async function fetchRepositories() {
   }
 }
 
-// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE
 function isRepoStrictlyFreeOpenSource(repo) {
-  // If repo has no license, check if paywall keywords exist. If license key exists, check OSI compliance
   if (repo.license && repo.license.key) {
     const key = repo.license.key.toLowerCase();
     if (!FREE_OPEN_SOURCE_LICENSES.includes(key)) return false;
   }
 
-  // Filter out commercial wrappers & paid requirements in description or topics
   const desc = (repo.description || '').toLowerCase();
   const topics = (repo.topics || []).join(' ').toLowerCase();
 
@@ -421,7 +403,6 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
-// RENDER REPOSITORY CARDS WITH BLOCK/HIDE BUTTON & DEEP PT-BR SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -453,7 +434,6 @@ async function renderRepos(repos) {
           </div>
         </div>
 
-        <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
         <div class="repo-description-box">
           <div class="summary-badge-header">
             <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${licenseName})</span>
@@ -694,6 +674,7 @@ function closeFavoritesModal() {
   dom.favoritesModal.classList.add('hidden');
 }
 
+// RENDER FAVORITES LIST WITH INDIVIDUAL PROMPT COPY BUTTON
 function renderFavoriteList() {
   dom.favListContainer.innerHTML = '';
 
@@ -707,21 +688,40 @@ function renderFavoriteList() {
     return;
   }
 
-  state.favorites.forEach(fav => {
+  state.favorites.forEach((fav, index) => {
     const item = document.createElement('div');
     item.className = 'fav-item-card';
     item.innerHTML = `
       <div class="fav-item-info">
-        <h4><a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name}</a> <span style="font-size:0.8rem; color:var(--accent-gold);">★ ${formatNumber(fav.stars)}</span></h4>
+        <h4>
+          <a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name}</a> 
+          <span style="font-size:0.8rem; color:var(--accent-gold); font-weight:700;">★ ${formatNumber(fav.stars)}</span>
+        </h4>
         <p><strong>🟢 Licença:</strong> ${fav.license || 'Open-Source Grátis'}</p>
         <p><strong>📌 O que é:</strong> ${escapeHtml(fav.summary_what || 'Sem descrição')}</p>
         <p><strong>🎯 Para que serve:</strong> ${escapeHtml(fav.summary_purpose || 'Utilitário de desenvolvimento')}</p>
       </div>
-      <button class="btn-icon btn-remove-fav" title="Remover" style="color:#f87171;">
-        <i class="fa-solid fa-trash"></i>
-      </button>
+
+      <div class="fav-item-actions">
+        <button class="btn btn-secondary btn-sm btn-copy-single-fav" title="Copiar prompt apenas deste repositório">
+          <i class="fa-solid fa-robot text-purple"></i> Copiar Prompt
+        </button>
+        <button class="btn-icon btn-remove-fav" title="Remover dos favoritos" style="color:#f87171;">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
     `;
 
+    // Click Single Prompt Copy
+    item.querySelector('.btn-copy-single-fav').addEventListener('click', () => {
+      const singlePrompt = generateSingleFavAiMarkdown(fav);
+      dom.aiMarkdownPreview.value = singlePrompt;
+      navigator.clipboard.writeText(singlePrompt).then(() => {
+        showToast(`Prompt individual de "${fav.name}" copiado!`);
+      });
+    });
+
+    // Click Remove Favorite
     item.querySelector('.btn-remove-fav').addEventListener('click', () => {
       state.favorites = state.favorites.filter(f => f.id !== fav.id);
       localStorage.setItem('gittrends_favs', JSON.stringify(state.favorites));
@@ -746,6 +746,39 @@ function clearAllFavorites() {
     renderRepos(state.currentRepos);
     showToast('Lista de interessantes limpa.');
   }
+}
+
+// GENERATE SINGLE REPO MARKDOWN PROMPT FOR FAVORITE ITEM
+function generateSingleFavAiMarkdown(fav) {
+  let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento especificamente sobre ele:\n\n`;
+  md += `### [${fav.full_name}](${fav.html_url})\n`;
+  md += `- **📜 Licença**: ${fav.license || 'Open Source (100% Grátis)'}\n`;
+  md += `- **📌 O que é**: ${fav.summary_what}\n`;
+  md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
+  md += `- **⚡ Por que usar**: ${fav.summary_why || 'Código aberto de alta popularidade'}\n`;
+  md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
+  md += `- **Estrelas**: ${fav.stars ? fav.stars.toLocaleString('pt-BR') : '0'} | **Forks**: ${fav.forks ? fav.forks.toLocaleString('pt-BR') : '0'}\n`;
+  if (fav.topics && fav.topics.length > 0) {
+    md += `- **Tópicos**: ${fav.topics.slice(0, 5).join(', ')}\n`;
+  }
+  md += `\n---\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
+  return md;
+}
+
+function generateSingleRepoAiMarkdown(repo, summary) {
+  let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias especificamente sobre ele:\n\n`;
+  md += `### [${repo.full_name}](${repo.html_url})\n`;
+  md += `- **📜 Licença**: ${repo.license ? repo.license.name : 'Open Source (100% Grátis)'}\n`;
+  md += `- **📌 O que é**: ${summary.what}\n`;
+  md += `- **🎯 Para que serve**: ${summary.purpose}\n`;
+  md += `- **⚡ Por que usar**: ${summary.whyUse}\n`;
+  md += `- **Linguagem**: ${repo.language || 'N/A'}\n`;
+  md += `- **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}\n`;
+  if (repo.topics && repo.topics.length > 0) {
+    md += `- **Tópicos**: ${repo.topics.slice(0, 5).join(', ')}\n`;
+  }
+  md += `\n---\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
+  return md;
 }
 
 function generateAiMarkdown() {
