@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v3.3 - Individual Prompt Exporter & Open-Source Engine
- * Suporte a cópia de prompts individuais dentro do modal de marcados
+ * GitTrends Hub v3.4 - Direct GitHub Navigation & Link Copying Engine
+ * Clique no card abre direto no GitHub + Botão de copiar link do repositório no card
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -403,6 +403,7 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
+// RENDER CARDS: CLICK CARDS TO OPEN DIRECTLY ON GITHUB + COPY LINK BUTTON
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -416,15 +417,19 @@ async function renderRepos(repos) {
     const card = document.createElement('div');
     card.className = 'repo-card';
     card.dataset.id = repo.id;
+    card.title = `Clique para abrir ${repo.full_name} diretamente no GitHub ↗`;
 
     card.innerHTML = `
       <div>
         <div class="repo-card-header">
           <div class="repo-title-wrapper">
             <img src="${repo.owner.avatar_url}" alt="${repo.owner.login}" class="owner-avatar" loading="lazy" />
-            <span class="repo-name">${repo.name}</span>
+            <a href="${repo.html_url}" target="_blank" rel="noopener noreferrer" class="repo-name" title="Abrir no GitHub">${repo.name} <i class="fa-solid fa-arrow-up-right-from-square external-link-icon"></i></a>
           </div>
           <div class="card-actions-top">
+            <button class="btn-copy-link-repo" title="Copiar link do GitHub">
+              <i class="fa-solid fa-link"></i>
+            </button>
             <button class="btn-star-repo ${isFav ? 'is-starred' : ''}" title="${isFav ? 'Remover dos interessantes' : 'Marcar como interessante'}">
               <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-star"></i>
             </button>
@@ -472,9 +477,19 @@ async function renderRepos(repos) {
       </div>
     `;
 
+    // Click Card -> Opens directly on GitHub in a new tab!
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-star-repo') || e.target.closest('.btn-block-repo')) return;
-      openDetailModal(repo, summary);
+      if (e.target.closest('.card-actions-top') || e.target.closest('.repo-name')) return;
+      window.open(repo.html_url, '_blank');
+    });
+
+    // Copy Link Button Click
+    const copyLinkBtn = card.querySelector('.btn-copy-link-repo');
+    copyLinkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(repo.html_url).then(() => {
+        showToast(`Link copiado: ${repo.html_url}`);
+      });
     });
 
     const starBtn = card.querySelector('.btn-star-repo');
@@ -674,7 +689,6 @@ function closeFavoritesModal() {
   dom.favoritesModal.classList.add('hidden');
 }
 
-// RENDER FAVORITES LIST WITH INDIVIDUAL PROMPT COPY BUTTON
 function renderFavoriteList() {
   dom.favListContainer.innerHTML = '';
 
@@ -694,7 +708,7 @@ function renderFavoriteList() {
     item.innerHTML = `
       <div class="fav-item-info">
         <h4>
-          <a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name}</a> 
+          <a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name} <i class="fa-solid fa-arrow-up-right-from-square external-link-icon"></i></a> 
           <span style="font-size:0.8rem; color:var(--accent-gold); font-weight:700;">★ ${formatNumber(fav.stars)}</span>
         </h4>
         <p><strong>🟢 Licença:</strong> ${fav.license || 'Open-Source Grátis'}</p>
@@ -703,6 +717,9 @@ function renderFavoriteList() {
       </div>
 
       <div class="fav-item-actions">
+        <button class="btn btn-secondary btn-sm btn-copy-link-fav" title="Copiar URL do GitHub">
+          <i class="fa-solid fa-link text-blue"></i> Copiar Link
+        </button>
         <button class="btn btn-secondary btn-sm btn-copy-single-fav" title="Copiar prompt apenas deste repositório">
           <i class="fa-solid fa-robot text-purple"></i> Copiar Prompt
         </button>
@@ -711,6 +728,13 @@ function renderFavoriteList() {
         </button>
       </div>
     `;
+
+    // Click Copy Link
+    item.querySelector('.btn-copy-link-fav').addEventListener('click', () => {
+      navigator.clipboard.writeText(fav.html_url).then(() => {
+        showToast(`Link copiado: ${fav.html_url}`);
+      });
+    });
 
     // Click Single Prompt Copy
     item.querySelector('.btn-copy-single-fav').addEventListener('click', () => {
@@ -748,7 +772,6 @@ function clearAllFavorites() {
   }
 }
 
-// GENERATE SINGLE REPO MARKDOWN PROMPT FOR FAVORITE ITEM
 function generateSingleFavAiMarkdown(fav) {
   let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento especificamente sobre ele:\n\n`;
   md += `### [${fav.full_name}](${fav.html_url})\n`;
