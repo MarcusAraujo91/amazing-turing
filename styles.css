@@ -529,6 +529,12 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.card-actions-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .repo-title-wrapper {
   display: flex;
   align-items: center;
@@ -562,8 +568,8 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -583,6 +589,27 @@ body {
   background: rgba(245, 158, 11, 0.2);
   color: var(--accent-gold);
   border-color: var(--accent-gold);
+}
+
+.btn-block-repo {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  color: var(--text-dim);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.btn-block-repo:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: #f87171;
 }
 
 /* REPO DESCRIPTION & BADGES */

@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v3.0 - Open-Source & 100% Free Repository Filter Engine
- * Filtra estritamente apenas repositórios com licenças Open-Source gratuitas (MIT, Apache, GPL, BSD, AGPL)
+ * GitTrends Hub v3.1 - Deep Open-Source & Commercial Paywall Filter
+ * Elimina repositórios sem licença limpa, wrappers de serviços pagos e adiciona recurso de Ocultar/Bloquear repositórios
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -24,6 +24,7 @@ const state = {
   autoTranslate: true,
   githubToken: localStorage.getItem('gittrends_pat') || '',
   favorites: JSON.parse(localStorage.getItem('gittrends_favs') || '[]'),
+  blockedRepos: JSON.parse(localStorage.getItem('gittrends_blocked') || '[]'),
   summaryCache: {},
   currentRepos: [],
   selectedRepo: null
@@ -225,7 +226,7 @@ function initEventListeners() {
     const prompt = `Olá Antigravity! Analisei este repositório Open-Source no GitHub e gostaria de debater ideias de desenvolvimento com você:
 
 ### Repositório Open-Source: [${repo.full_name}](${repo.html_url})
-📜 **Licença**: ${repo.license ? repo.license.name : 'Open Source'} (100% Grátis)
+📜 **Licença**: ${repo.license ? repo.license.name : 'MIT'} (100% Grátis)
 📌 **O que é**: ${summary.what}
 🎯 **Para que serve**: ${summary.purpose}
 ⚡ **Por que usar**: ${summary.whyUse}
@@ -317,12 +318,10 @@ function buildQueryString() {
     }
   }
 
-  // License filter
   if (state.freeOnly) {
     if (state.license !== 'opensource-all') {
       parts.push(`license:${state.license}`);
     } else {
-      // Query top OSI open source licenses
       parts.push(`(license:mit OR license:apache-2.0 OR license:gpl-3.0 OR license:bsd-3-clause OR license:agpl-3.0)`);
     }
   }
@@ -369,6 +368,9 @@ async function fetchRepositories() {
     const data = await response.json();
     let rawItems = data.items || [];
 
+    // FILTER OUT USER BLOCKED REPOSITORIES
+    rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
+
     // STRICT CLIENT FILTER FOR 100% FREE OPEN SOURCE ONLY
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
@@ -397,26 +399,33 @@ async function fetchRepositories() {
   }
 }
 
-// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE (Excludes commercial paywalls / freemium traps)
+// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE (Excludes commercial paywalls / freemium traps / missing licenses)
 function isRepoStrictlyFreeOpenSource(repo) {
-  // Check license
+  // MUST have a recognized Open Source License
   if (!repo.license || !repo.license.key) return false;
   const key = repo.license.key.toLowerCase();
   
   if (!FREE_OPEN_SOURCE_LICENSES.includes(key)) return false;
 
-  // Filter out paid enterprise freemium wrappers if mentioned in description
+  // Filter out commercial wrappers & paid requirements in description or topics
   const desc = (repo.description || '').toLowerCase();
-  const paidKeywords = ['pricing required', 'paid license required', 'commercial license only', 'freemium tier only'];
+  const topics = (repo.topics || []).join(' ').toLowerCase();
+  const name = repo.name.toLowerCase();
+
+  const paidKeywords = [
+    'pricing required', 'paid license', 'commercial license', 'freemium',
+    'subscription', 'paid service', 'enterprise edition required', 'paywall',
+    'paid api required', 'trial required', 'paid plan'
+  ];
   
   for (const kw of paidKeywords) {
-    if (desc.includes(kw)) return false;
+    if (desc.includes(kw) || topics.includes(kw)) return false;
   }
 
   return true;
 }
 
-// RENDER REPOSITORY CARDS WITH FREE OPEN SOURCE BADGES & PT-BR SUMMARIES
+// RENDER REPOSITORY CARDS WITH BLOCK/HIDE BUTTON & DEEP PT-BR SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -438,9 +447,14 @@ async function renderRepos(repos) {
             <img src="${repo.owner.avatar_url}" alt="${repo.owner.login}" class="owner-avatar" loading="lazy" />
             <span class="repo-name">${repo.name}</span>
           </div>
-          <button class="btn-star-repo ${isFav ? 'is-starred' : ''}" title="${isFav ? 'Remover dos interessantes' : 'Marcar como interessante'}">
-            <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-star"></i>
-          </button>
+          <div class="card-actions-top">
+            <button class="btn-star-repo ${isFav ? 'is-starred' : ''}" title="${isFav ? 'Remover dos interessantes' : 'Marcar como interessante'}">
+              <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+            </button>
+            <button class="btn-block-repo" title="Ocultar este repositório (não é grátis ou não me interessa)">
+              <i class="fa-solid fa-eye-slash"></i>
+            </button>
+          </div>
         </div>
 
         <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
@@ -483,7 +497,7 @@ async function renderRepos(repos) {
     `;
 
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-star-repo')) return;
+      if (e.target.closest('.btn-star-repo') || e.target.closest('.btn-block-repo')) return;
       openDetailModal(repo, summary);
     });
 
@@ -493,7 +507,23 @@ async function renderRepos(repos) {
       toggleFavorite(repo, summary);
     });
 
+    const blockBtn = card.querySelector('.btn-block-repo');
+    blockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      blockRepository(repo.id, repo.name);
+    });
+
     dom.repoGrid.appendChild(card);
+  }
+}
+
+// BLOCK / HIDE REPOSITORY
+function blockRepository(repoId, repoName) {
+  if (!state.blockedRepos.includes(repoId)) {
+    state.blockedRepos.push(repoId);
+    localStorage.setItem('gittrends_blocked', JSON.stringify(state.blockedRepos));
+    showToast(`"${repoName}" foi ocultado da sua lista!`);
+    fetchRepositories();
   }
 }
 
