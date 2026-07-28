@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v3.4 - Direct GitHub Navigation & Link Copying Engine
- * Clique no card abre direto no GitHub + Botão de copiar link do repositório no card
+ * GitTrends Hub v4.0 - Hyper-Detailed Card Summaries & Actionable Use Cases Engine
+ * Exibe resumos ultra-detalhados nos cards: O que faz + O que dá para fazer (Casos de Uso) + Ideia Rápida de Projeto
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -403,7 +403,7 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
-// RENDER CARDS: CLICK CARDS TO OPEN DIRECTLY ON GITHUB + COPY LINK BUTTON
+// RENDER CARDS WITH ENRICHED ACTIONABLE SUMMARIES (WHAT IT DOES + WHAT YOU CAN BUILD WITH IT)
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -411,7 +411,7 @@ async function renderRepos(repos) {
     const isFav = state.favorites.some(f => f.id === repo.id);
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
 
-    const summary = await getOrGenerateRichSummary(repo);
+    const summary = await getOrGenerateHyperDetailedSummary(repo);
     const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'Open Source';
 
     const card = document.createElement('div');
@@ -439,6 +439,7 @@ async function renderRepos(repos) {
           </div>
         </div>
 
+        <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
         <div class="repo-description-box">
           <div class="summary-badge-header">
             <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${licenseName})</span>
@@ -446,9 +447,9 @@ async function renderRepos(repos) {
           </div>
 
           <div class="deep-summary-preview">
-            <p class="summary-line"><strong>📌 O que é:</strong> ${escapeHtml(summary.what)}</p>
-            <p class="summary-line"><strong>🎯 Para que serve:</strong> ${escapeHtml(summary.purpose)}</p>
-            <p class="summary-line"><strong>⚡ Por que usar:</strong> ${escapeHtml(summary.whyUse)}</p>
+            <p class="summary-line"><strong>📌 O que faz:</strong> ${escapeHtml(summary.whatItDoes)}</p>
+            <p class="summary-line"><strong>🛠️ O que dá para fazer:</strong> ${escapeHtml(summary.whatYouCanBuild)}</p>
+            <p class="summary-line highlight-idea"><strong>💡 Ideia de Projeto:</strong> ${escapeHtml(summary.projectIdea)}</p>
           </div>
         </div>
 
@@ -477,7 +478,7 @@ async function renderRepos(repos) {
       </div>
     `;
 
-    // Click Card -> Opens directly on GitHub in a new tab!
+    // Click Card -> Opens directly on GitHub in a new tab
     card.addEventListener('click', (e) => {
       if (e.target.closest('.card-actions-top') || e.target.closest('.repo-name')) return;
       window.open(repo.html_url, '_blank');
@@ -517,7 +518,8 @@ function blockRepository(repoId, repoName) {
   }
 }
 
-async function getOrGenerateRichSummary(repo) {
+// HYPER-DETAILED ANALYSIS ENGINE (Generates "O que faz", "O que dá para fazer", and "Ideia de Projeto")
+async function getOrGenerateHyperDetailedSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
   const rawDesc = repo.description || '';
@@ -534,46 +536,57 @@ async function getOrGenerateRichSummary(repo) {
         }
       }
     } catch (e) {
-      console.warn('Fallback para síntese inteligente');
+      console.warn('Fallback para inteligência técnica');
     }
   }
 
   const topicsStr = (repo.topics || []).join(' ').toLowerCase();
   const nameLower = repo.name.toLowerCase();
+  const descLower = (rawDesc + ' ' + translatedDesc).toLowerCase();
   const lang = repo.language || 'Código Aberto';
 
-  let category = 'Software Open-Source';
-  let purpose = 'Código 100% gratuito e livre para usar, modificar e integrar.';
-  let whyUse = 'Projeto gratuito sem paywalls, altamente avaliado pela comunidade dev.';
+  let category = 'Solução Open-Source';
+  let whatItDoes = translatedDesc || `Código-fonte aberto desenvolvido em ${lang} com alta popularidade comunitária.`;
+  let whatYouCanBuild = 'Construir soluções personalizadas, integrar APIs e criar sistemas sem pagar licenças.';
+  let projectIdea = `Integrar as funções de "${repo.name}" nos nossos sistemas ou criar um micro-serviço baseado nele.`;
 
-  if (topicsStr.includes('agent') || nameLower.includes('agent')) {
-    category = 'Agente de IA (Grátis)';
-    purpose = 'Framework open-source para criar agentes de IA autônomos sem pagar licenças de terceiros.';
-    whyUse = 'Permite ter seu próprio sistema de IA rodando localmente de graça.';
+  // Specific domain intelligence
+  if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
+    category = 'Agente de IA (Autônomo)';
+    whatItDoes = translatedDesc || 'Framework completo para criar assistentes e robôs de IA que executam tarefas sozinhos.';
+    whatYouCanBuild = 'Criar atendentes inteligentes, bots automáticos no WhatsApp/Telegram, e executores de tarefas de programação.';
+    projectIdea = 'Criar um agente de suporte ao cliente ou um assistente interno de automação dev.';
   } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui') || topicsStr.includes('tailwind')) {
-    category = 'Componentes UI (Grátis)';
-    purpose = 'Interface e componentes visuais 100% gratuitos para construir sistemas web modernos.';
-    whyUse = 'Acelera a criação do frontend sem custos de licença ou mensalidades.';
-  } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres')) {
-    category = 'Banco de Dados (Open Source)';
-    purpose = 'Armazenar e consultar dados de forma gratuita, segura e escalável.';
-    whyUse = 'Código aberto com controle total dos seus dados sem surpresas no orçamento.';
-  } else if (topicsStr.includes('cli') || nameLower.includes('cli')) {
-    category = 'Ferramenta CLI (Grátis)';
-    purpose = 'Utilitário de terminal open-source para automação diária de tarefas.';
-    whyUse = 'Ferramenta leve, gratuita e totalmente customizável.';
+    category = 'Design System & UI';
+    whatItDoes = translatedDesc || 'Conjunto de componentes de interface gráfica de alto padrão prontos para uso em sites e apps.';
+    whatYouCanBuild = 'Montar dashboards administrativos, landing pages modernas e aplicativos web elegantes sem desenhar do zero.';
+    projectIdea = 'Usar esse conjunto de componentes para reestilizar a interface dos nossos projetos atuais.';
+  } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres') || topicsStr.includes('redis')) {
+    category = 'Banco de Dados & Cache';
+    whatItDoes = translatedDesc || 'Motor de armazenamento e consulta de dados otimizado para alta velocidade e grande volume.';
+    whatYouCanBuild = 'Armazenar históricos de usuários, fazer busca vetorial para IA e criar cache de alta velocidade.';
+    projectIdea = 'Integrar este banco de dados para acelerar o tempo de resposta das nossas APIs.';
+  } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
+    category = 'Ferramenta de Terminal (CLI)';
+    whatItDoes = translatedDesc || 'Utilitário leve para rodar comandos rápidos e automações direto na linha de comando.';
+    whatYouCanBuild = 'Automatizar builds, fazer deploys automáticos e manipular arquivos no servidor rapidamente.';
+    projectIdea = 'Criar scripts de terminal para automatizar tarefas diárias do nosso fluxo de trabalho.';
   } else if (topicsStr.includes('scraper') || topicsStr.includes('crawler') || nameLower.includes('scrape')) {
-    category = 'Extrator de Dados (Open Source)';
-    purpose = 'Raspagem de dados web e extração gratuita sem pagar por planos de web scraping.';
-    whyUse = 'Economize dinheiro extraindo dados com sua própria infraestrutura livre.';
+    category = 'Raspador de Dados (Scraper)';
+    whatItDoes = translatedDesc || 'Sistema automático que navega na web e extrai conteúdos, preços e dados de sites.';
+    whatYouCanBuild = 'Monitorar preços de concorrentes, extrair notícias em tempo real e estruturar dados da internet.';
+    projectIdea = 'Montar um robô de busca de preços ou um alimentador de notícias automático.';
+  } else if (topicsStr.includes('iptv') || nameLower.includes('iptv') || topicsStr.includes('stream') || nameLower.includes('media')) {
+    category = 'Streaming & Mídia';
+    whatItDoes = translatedDesc || 'Plataforma para transmissão, organização e reprodução de conteúdos de vídeo e áudio.';
+    whatYouCanBuild = 'Criar seu próprio player de vídeo, organizar listas de canais públicos e transmitir mídias.';
+    projectIdea = 'Desenvolver um aplicativo agregador de mídias e transmissões abertas.';
   }
 
-  const whatText = translatedDesc || `${category} desenvolvido em ${lang} com código 100% aberto.`;
-
   const summaryObj = {
-    what: whatText,
-    purpose: purpose,
-    whyUse: whyUse,
+    whatItDoes: whatItDoes,
+    whatYouCanBuild: whatYouCanBuild,
+    projectIdea: projectIdea,
     category: category
   };
 
@@ -594,10 +607,10 @@ function openDetailModal(repo, summary) {
 
   dom.detailDescPt.innerHTML = `
     <div class="detail-breakdown-box">
-      <p class="breakdown-item"><strong>🟢 Status da Licença:</strong> <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis &amp; Open-Source (${repo.license ? repo.license.name : 'Open Source'})</span></p>
-      <p class="breakdown-item"><strong>📌 O que o projeto faz:</strong> ${escapeHtml(summary.what)}</p>
-      <p class="breakdown-item"><strong>🎯 Qual problema ele resolve:</strong> ${escapeHtml(summary.purpose)}</p>
-      <p class="breakdown-item"><strong>⚡ Por que ele vale a pena:</strong> ${escapeHtml(summary.whyUse)}</p>
+      <p class="breakdown-item"><strong>🟢 Licença:</strong> <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${repo.license ? repo.license.name : 'Open Source'})</span></p>
+      <p class="breakdown-item"><strong>📌 O que faz:</strong> ${escapeHtml(summary.whatItDoes)}</p>
+      <p class="breakdown-item"><strong>🛠️ O que dá para fazer:</strong> ${escapeHtml(summary.whatYouCanBuild)}</p>
+      <p class="breakdown-item"><strong>💡 Ideia de Projeto:</strong> ${escapeHtml(summary.projectIdea)}</p>
     </div>
   `;
 
@@ -658,9 +671,9 @@ function toggleFavorite(repo, summary) {
       name: repo.name,
       full_name: repo.full_name,
       html_url: repo.html_url,
-      summary_what: summary.what,
-      summary_purpose: summary.purpose,
-      summary_why: summary.whyUse,
+      summary_whatItDoes: summary.whatItDoes,
+      summary_whatYouCanBuild: summary.whatYouCanBuild,
+      summary_projectIdea: summary.projectIdea,
       license: repo.license ? repo.license.name : 'Open Source',
       language: repo.language,
       stars: repo.stargazers_count,
@@ -712,8 +725,8 @@ function renderFavoriteList() {
           <span style="font-size:0.8rem; color:var(--accent-gold); font-weight:700;">★ ${formatNumber(fav.stars)}</span>
         </h4>
         <p><strong>🟢 Licença:</strong> ${fav.license || 'Open-Source Grátis'}</p>
-        <p><strong>📌 O que é:</strong> ${escapeHtml(fav.summary_what || 'Sem descrição')}</p>
-        <p><strong>🎯 Para que serve:</strong> ${escapeHtml(fav.summary_purpose || 'Utilitário de desenvolvimento')}</p>
+        <p><strong>📌 O que faz:</strong> ${escapeHtml(fav.summary_whatItDoes || 'Sem descrição')}</p>
+        <p><strong>🛠️ O que dá para fazer:</strong> ${escapeHtml(fav.summary_whatYouCanBuild || 'Construir soluções gratuitas')}</p>
       </div>
 
       <div class="fav-item-actions">
@@ -729,14 +742,12 @@ function renderFavoriteList() {
       </div>
     `;
 
-    // Click Copy Link
     item.querySelector('.btn-copy-link-fav').addEventListener('click', () => {
       navigator.clipboard.writeText(fav.html_url).then(() => {
         showToast(`Link copiado: ${fav.html_url}`);
       });
     });
 
-    // Click Single Prompt Copy
     item.querySelector('.btn-copy-single-fav').addEventListener('click', () => {
       const singlePrompt = generateSingleFavAiMarkdown(fav);
       dom.aiMarkdownPreview.value = singlePrompt;
@@ -745,7 +756,6 @@ function renderFavoriteList() {
       });
     });
 
-    // Click Remove Favorite
     item.querySelector('.btn-remove-fav').addEventListener('click', () => {
       state.favorites = state.favorites.filter(f => f.id !== fav.id);
       localStorage.setItem('gittrends_favs', JSON.stringify(state.favorites));
@@ -773,12 +783,12 @@ function clearAllFavorites() {
 }
 
 function generateSingleFavAiMarkdown(fav) {
-  let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento especificamente sobre ele:\n\n`;
+  let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias especificamente sobre ele:\n\n`;
   md += `### [${fav.full_name}](${fav.html_url})\n`;
   md += `- **📜 Licença**: ${fav.license || 'Open Source (100% Grátis)'}\n`;
-  md += `- **📌 O que é**: ${fav.summary_what}\n`;
-  md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
-  md += `- **⚡ Por que usar**: ${fav.summary_why || 'Código aberto de alta popularidade'}\n`;
+  md += `- **📌 O que faz**: ${fav.summary_whatItDoes}\n`;
+  md += `- **🛠️ O que dá para fazer**: ${fav.summary_whatYouCanBuild}\n`;
+  md += `- **💡 Ideia de Projeto**: ${fav.summary_projectIdea || 'Integrar no nosso ecossistema'}\n`;
   md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
   md += `- **Estrelas**: ${fav.stars ? fav.stars.toLocaleString('pt-BR') : '0'} | **Forks**: ${fav.forks ? fav.forks.toLocaleString('pt-BR') : '0'}\n`;
   if (fav.topics && fav.topics.length > 0) {
@@ -792,9 +802,9 @@ function generateSingleRepoAiMarkdown(repo, summary) {
   let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias especificamente sobre ele:\n\n`;
   md += `### [${repo.full_name}](${repo.html_url})\n`;
   md += `- **📜 Licença**: ${repo.license ? repo.license.name : 'Open Source (100% Grátis)'}\n`;
-  md += `- **📌 O que é**: ${summary.what}\n`;
-  md += `- **🎯 Para que serve**: ${summary.purpose}\n`;
-  md += `- **⚡ Por que usar**: ${summary.whyUse}\n`;
+  md += `- **📌 O que faz**: ${summary.whatItDoes}\n`;
+  md += `- **🛠️ O que dá para fazer**: ${summary.whatYouCanBuild}\n`;
+  md += `- **💡 Ideia de Projeto**: ${summary.projectIdea}\n`;
   md += `- **Linguagem**: ${repo.language || 'N/A'}\n`;
   md += `- **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}\n`;
   if (repo.topics && repo.topics.length > 0) {
@@ -814,9 +824,9 @@ function generateAiMarkdown() {
   state.favorites.forEach((fav, index) => {
     md += `### ${index + 1}. [${fav.full_name}](${fav.html_url})\n`;
     md += `- **📜 Licença**: ${fav.license || 'MIT / Open Source (100% Grátis)'}\n`;
-    md += `- **📌 O que é**: ${fav.summary_what}\n`;
-    md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
-    md += `- **⚡ Por que usar**: ${fav.summary_why || 'Código aberto sem custos'}\n`;
+    md += `- **📌 O que faz**: ${fav.summary_whatItDoes}\n`;
+    md += `- **🛠️ O que dá para fazer**: ${fav.summary_whatYouCanBuild}\n`;
+    md += `- **💡 Ideia de Projeto**: ${fav.summary_projectIdea || 'Usar no nosso fluxo de desenvolvimento'}\n`;
     md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
     md += `- **Estrelas**: ${fav.stars.toLocaleString('pt-BR')} | **Forks**: ${fav.forks.toLocaleString('pt-BR')}\n`;
     if (fav.topics && fav.topics.length > 0) {
