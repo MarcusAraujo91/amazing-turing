@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitTrends Hub - Os Melhores Repositórios do GitHub em Português</title>
-  <meta name="description" content="Filtre e descubra os repositórios em alta no GitHub com resumos automáticos em PT-BR e sugestões de ideias para IA.">
+  <title>GitTrends Hub - Os Melhores Repositórios Open-Source &amp; 100% Grátis</title>
+  <meta name="description" content="Filtre e descubra os melhores repositórios open-source 100% gratuitos no GitHub com resumos automáticos em PT-BR.">
   
   <!-- Cache Control Meta Tags -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -19,7 +19,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <link rel="stylesheet" href="styles.css?v=2.0">
+  <link rel="stylesheet" href="styles.css?v=3.0">
 </head>
 <body>
 
@@ -36,8 +36,8 @@
           <i class="fa-solid fa-bolt-lightning"></i>
         </div>
         <div class="brand-text">
-          <h1>GitTrends<span>Hub</span> <span class="live-pill"><span class="pulse-dot"></span> AO VIVO v2.0</span></h1>
-          <span class="tagline">Os melhores repositórios do GitHub • Resumos Detalhados &amp; Explicativos em PT-BR</span>
+          <h1>GitTrends<span>Hub</span> <span class="live-pill"><span class="pulse-dot"></span> 100% GRÁTIS &amp; OPEN-SOURCE</span></h1>
+          <span class="tagline">Os melhores repositórios Open-Source gratuitos • Resumos em PT-BR</span>
         </div>
       </div>
       
@@ -57,7 +57,7 @@
 
     <!-- CONTROL PANEL / FILTERS -->
     <section class="control-panel">
-      <!-- Search & Presets Bar -->
+      <!-- Search & Toggles Bar -->
       <div class="search-section">
         <div class="search-bar-wrapper">
           <i class="fa-solid fa-magnifying-glass search-icon"></i>
@@ -66,13 +66,25 @@
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-        
-        <div class="auto-translate-toggle">
-          <label class="switch-label" title="Traduzir automaticamente todas as descrições dos repositórios para Português (PT-BR)">
-            <input type="checkbox" id="toggle-auto-translate" checked />
-            <span class="slider"></span>
-            <span class="toggle-text"><i class="fa-solid fa-language"></i> Traduzir para PT-BR</span>
-          </label>
+
+        <div class="toggles-wrapper">
+          <!-- FREE OPEN-SOURCE ONLY TOGGLE -->
+          <div class="free-opensource-toggle">
+            <label class="switch-label green-glow" title="Filtrar estritamente apenas repositórios com licenças Open-Source 100% gratuitas (MIT, Apache, GPL, BSD)">
+              <input type="checkbox" id="toggle-free-only" checked />
+              <span class="slider green-slider"></span>
+              <span class="toggle-text"><i class="fa-solid fa-shield-halved text-green"></i> Somente Open-Source Grátis</span>
+            </label>
+          </div>
+
+          <!-- AUTO TRANSLATE TOGGLE -->
+          <div class="auto-translate-toggle">
+            <label class="switch-label" title="Traduzir automaticamente todas as descrições dos repositórios para Português (PT-BR)">
+              <input type="checkbox" id="toggle-auto-translate" checked />
+              <span class="slider"></span>
+              <span class="toggle-text"><i class="fa-solid fa-language"></i> Traduzir para PT-BR</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -90,6 +102,18 @@
 
       <!-- Advanced Filters Row -->
       <div class="filter-controls-row">
+        <div class="filter-group">
+          <label for="filter-license"><i class="fa-solid fa-scale-balanced"></i> Licença Open-Source</label>
+          <select id="filter-license">
+            <option value="opensource-all" selected>Todas Gratuita/Open-Source (MIT, Apache, GPL...)</option>
+            <option value="mit">MIT (100% Livre Comercial &amp; Pessoal)</option>
+            <option value="apache-2.0">Apache 2.0 (Livre com Patentes)</option>
+            <option value="gpl-3.0">GPL v3 (Open Source Copyleft)</option>
+            <option value="bsd-3-clause">BSD (Livre e Permissiva)</option>
+            <option value="agpl-3.0">AGPL v3 (Open Source Web)</option>
+          </select>
+        </div>
+
         <div class="filter-group">
           <label for="filter-language"><i class="fa-solid fa-code"></i> Linguagem</label>
           <select id="filter-language">
@@ -117,17 +141,6 @@
         </div>
 
         <div class="filter-group">
-          <label for="filter-period"><i class="fa-regular fa-calendar"></i> Criado nos últimos</label>
-          <select id="filter-period">
-            <option value="all">Todo o período</option>
-            <option value="7">7 dias</option>
-            <option value="30" selected>30 dias</option>
-            <option value="90">90 dias</option>
-            <option value="365">1 ano</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
           <label for="filter-sort"><i class="fa-solid fa-arrow-down-wide-short"></i> Ordenar por</label>
           <select id="filter-sort">
             <option value="stars" selected>Estrelas (Mais Populares)</option>
@@ -140,7 +153,7 @@
 
     <!-- STATUS BAR / METRICS -->
     <div class="status-bar">
-      <div id="results-count" class="results-count">Carregando repositórios...</div>
+      <div id="results-count" class="results-count">Carregando repositórios open-source...</div>
       <div class="rate-limit-info" id="rate-limit-info" title="Limite de requisições à API pública do GitHub">
         <i class="fa-solid fa-network-wired"></i> API GitHub: <span id="rate-limit-remaining">--</span>/60 req/h
       </div>
@@ -150,14 +163,14 @@
     <main class="repo-grid-container">
       <div id="loading-spinner" class="spinner-container">
         <div class="spinner"></div>
-        <p>Analisando repositórios e gerando resumos detalhados em Português...</p>
+        <p>Buscando repositórios 100% Open-Source e Grátis com resumos em PT-BR...</p>
       </div>
 
       <div id="repo-grid" class="repo-grid"></div>
 
       <div id="empty-state" class="empty-state hidden">
         <i class="fa-solid fa-folder-open"></i>
-        <h3>Nenhum repositório encontrado</h3>
+        <h3>Nenhum repositório open-source encontrado</h3>
         <p>Tente ajustar os filtros acima ou buscar por outros termos.</p>
       </div>
     </main>
@@ -195,7 +208,7 @@
         <div class="detail-metrics-row">
           <div class="metric-card"><i class="fa-solid fa-star text-gold"></i> <span id="detail-stars">0</span> <span>Estrelas</span></div>
           <div class="metric-card"><i class="fa-solid fa-code-fork text-blue"></i> <span id="detail-forks">0</span> <span>Forks</span></div>
-          <div class="metric-card"><i class="fa-solid fa-circle-dot text-green"></i> <span id="detail-issues">0</span> <span>Issues Abertas</span></div>
+          <div class="metric-card"><i class="fa-solid fa-shield-halved text-green"></i> <span id="detail-license">MIT</span> <span>Licença Grátis</span></div>
           <div class="metric-card"><i class="fa-solid fa-code text-purple"></i> <span id="detail-lang">N/A</span> <span>Linguagem</span></div>
         </div>
 
@@ -288,6 +301,6 @@
     <i class="fa-solid fa-circle-check"></i> <span id="toast-message">Notificação</span>
   </div>
 
-  <script src="app.js?v=2.0"></script>
+  <script src="app.js?v=3.0"></script>
 </body>
 </html>

@@ -1,12 +1,20 @@
 /**
- * GitTrends Hub v2.0 - Rich Smart Summary Engine
- * Resumos explicativos ultra-detalhados em PT-BR para leitura imediata no card
+ * GitTrends Hub v3.0 - Open-Source & 100% Free Repository Filter Engine
+ * Filtra estritamente apenas repositórios com licenças Open-Source gratuitas (MIT, Apache, GPL, BSD, AGPL)
  */
+
+// APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
+const FREE_OPEN_SOURCE_LICENSES = [
+  'mit', 'apache-2.0', 'gpl-3.0', 'gpl-2.0', 'bsd-3-clause', 'bsd-2-clause', 
+  'agpl-3.0', 'mpl-2.0', 'unlicense', 'isc', 'lgpl-3.0', 'cc0-1.0'
+];
 
 // STATE MANAGEMENT
 const state = {
   query: '',
   preset: 'trending-today',
+  freeOnly: true,
+  license: 'opensource-all',
   language: '',
   minStars: 100,
   periodDays: 30,
@@ -47,8 +55,10 @@ const LANGUAGE_COLORS = {
 const dom = {
   searchInput: document.getElementById('search-input'),
   btnClearSearch: document.getElementById('btn-clear-search'),
+  toggleFreeOnly: document.getElementById('toggle-free-only'),
   toggleAutoTranslate: document.getElementById('toggle-auto-translate'),
   presetChips: document.querySelectorAll('.chip'),
+  filterLicense: document.getElementById('filter-license'),
   filterLanguage: document.getElementById('filter-language'),
   filterStars: document.getElementById('filter-stars'),
   filterPeriod: document.getElementById('filter-period'),
@@ -73,6 +83,7 @@ const dom = {
   detailRepoLink: document.getElementById('detail-repo-link'),
   detailStars: document.getElementById('detail-stars'),
   detailForks: document.getElementById('detail-forks'),
+  detailLicense: document.getElementById('detail-license'),
   detailIssues: document.getElementById('detail-issues'),
   detailLang: document.getElementById('detail-lang'),
   detailDescPt: document.getElementById('detail-desc-pt'),
@@ -138,6 +149,12 @@ function initEventListeners() {
     fetchRepositories();
   });
 
+  dom.toggleFreeOnly.addEventListener('change', (e) => {
+    state.freeOnly = e.target.checked;
+    state.page = 1;
+    fetchRepositories();
+  });
+
   dom.toggleAutoTranslate.addEventListener('change', (e) => {
     state.autoTranslate = e.target.checked;
     renderRepos(state.currentRepos);
@@ -153,6 +170,12 @@ function initEventListeners() {
     });
   });
 
+  dom.filterLicense.addEventListener('change', (e) => {
+    state.license = e.target.value;
+    state.page = 1;
+    fetchRepositories();
+  });
+
   dom.filterLanguage.addEventListener('change', (e) => {
     state.language = e.target.value;
     state.page = 1;
@@ -161,12 +184,6 @@ function initEventListeners() {
 
   dom.filterStars.addEventListener('change', (e) => {
     state.minStars = parseInt(e.target.value, 10);
-    state.page = 1;
-    fetchRepositories();
-  });
-
-  dom.filterPeriod.addEventListener('change', (e) => {
-    state.periodDays = e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10);
     state.page = 1;
     fetchRepositories();
   });
@@ -205,21 +222,22 @@ function initEventListeners() {
     if (!state.selectedRepo) return;
     const repo = state.selectedRepo;
     const summary = state.summaryCache[repo.id] || {};
-    const prompt = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias de desenvolvimento com você:
+    const prompt = `Olá Antigravity! Analisei este repositório Open-Source no GitHub e gostaria de debater ideias de desenvolvimento com você:
 
-### Repositório: [${repo.full_name}](${repo.html_url})
+### Repositório Open-Source: [${repo.full_name}](${repo.html_url})
+📜 **Licença**: ${repo.license ? repo.license.name : 'Open Source'} (100% Grátis)
 📌 **O que é**: ${summary.what}
 🎯 **Para que serve**: ${summary.purpose}
-⚡ **Diferenciais**: ${summary.whyUse}
+⚡ **Por que usar**: ${summary.whyUse}
 💻 **Linguagem**: ${repo.language || 'N/A'} | ⭐ **Estrelas**: ${repo.stargazers_count.toLocaleString('pt-BR')} | 🍴 **Forks**: ${repo.forks_count.toLocaleString('pt-BR')}
 
 **Análise & Próximos Passos:**
-1. Como podemos adaptar o conceito deste projeto para as nossas aplicações?
+1. Como podemos utilizar este código open-source gratuito nos nossos projetos?
 2. Quais módulos valem a pena integrarmos imediatamente?
-3. Quais diferenciais podemos criar para evoluir essa ideia?`;
+3. Quais diferenciais podemos criar para evoluir essa solução?`;
 
     navigator.clipboard.writeText(prompt).then(() => {
-      showToast('Prompt detalhado deste repositório copiado para a IA em Português!');
+      showToast('Prompt deste repositório Open-Source copiado em Português!');
     });
   });
 
@@ -299,18 +317,22 @@ function buildQueryString() {
     }
   }
 
+  // License filter
+  if (state.freeOnly) {
+    if (state.license !== 'opensource-all') {
+      parts.push(`license:${state.license}`);
+    } else {
+      // Query top OSI open source licenses
+      parts.push(`(license:mit OR license:apache-2.0 OR license:gpl-3.0 OR license:bsd-3-clause OR license:agpl-3.0)`);
+    }
+  }
+
   if (state.language) {
     parts.push(`language:${state.language}`);
   }
 
   if (state.minStars > 0) {
     parts.push(`stars:>=${state.minStars}`);
-  }
-
-  if (state.periodDays !== 'all' && state.preset !== 'new-stars' && state.preset !== 'trending-today' && state.preset !== 'trending-week') {
-    const days = parseInt(state.periodDays, 10);
-    const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    parts.push(`created:>${dateLimit}`);
   }
 
   return parts.join(' ');
@@ -345,12 +367,19 @@ async function fetchRepositories() {
     }
 
     const data = await response.json();
-    state.currentRepos = data.items || [];
+    let rawItems = data.items || [];
+
+    // STRICT CLIENT FILTER FOR 100% FREE OPEN SOURCE ONLY
+    if (state.freeOnly) {
+      rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
+    }
+
+    state.currentRepos = rawItems;
     
-    dom.resultsCount.textContent = `${data.total_count.toLocaleString('pt-BR')} repositórios em destaque`;
+    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios Open-Source 100% grátis nesta página`;
     dom.pageIndicator.textContent = `Página ${state.page}`;
     dom.btnPrevPage.disabled = state.page === 1;
-    dom.btnNextPage.disabled = state.currentRepos.length < state.perPage;
+    dom.btnNextPage.disabled = rawItems.length < state.perPage;
 
     if (state.currentRepos.length === 0) {
       showEmptyState(true);
@@ -368,7 +397,26 @@ async function fetchRepositories() {
   }
 }
 
-// RENDER REPOSITORY CARDS WITH DEEP EXPLANATORY PT-BR SUMMARIES ON FRONT
+// CHECK IF A REPOSITORY IS STRICTLY FREE & OPEN SOURCE (Excludes commercial paywalls / freemium traps)
+function isRepoStrictlyFreeOpenSource(repo) {
+  // Check license
+  if (!repo.license || !repo.license.key) return false;
+  const key = repo.license.key.toLowerCase();
+  
+  if (!FREE_OPEN_SOURCE_LICENSES.includes(key)) return false;
+
+  // Filter out paid enterprise freemium wrappers if mentioned in description
+  const desc = (repo.description || '').toLowerCase();
+  const paidKeywords = ['pricing required', 'paid license required', 'commercial license only', 'freemium tier only'];
+  
+  for (const kw of paidKeywords) {
+    if (desc.includes(kw)) return false;
+  }
+
+  return true;
+}
+
+// RENDER REPOSITORY CARDS WITH FREE OPEN SOURCE BADGES & PT-BR SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -376,8 +424,8 @@ async function renderRepos(repos) {
     const isFav = state.favorites.some(f => f.id === repo.id);
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
 
-    // Deep Summary Engine
     const summary = await getOrGenerateRichSummary(repo);
+    const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'MIT';
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -398,7 +446,7 @@ async function renderRepos(repos) {
         <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
         <div class="repo-description-box">
           <div class="summary-badge-header">
-            <span class="pt-br-badge"><i class="fa-solid fa-file-contract"></i> Resumo Explicativo em PT-BR</span>
+            <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${licenseName})</span>
             <span class="category-pill">${summary.category}</span>
           </div>
 
@@ -449,7 +497,7 @@ async function renderRepos(repos) {
   }
 }
 
-// RICH SMART SUMMARY ENGINE (Produces 3 distinct detailed PT-BR insights)
+// RICH SMART SUMMARY ENGINE
 async function getOrGenerateRichSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
@@ -476,46 +524,33 @@ async function getOrGenerateRichSummary(repo) {
   const descLower = (rawDesc + ' ' + translatedDesc).toLowerCase();
   const lang = repo.language || 'Código Aberto';
 
-  let category = 'Solução de Software';
-  let purpose = 'Automatizar e otimizar processos de desenvolvimento de software.';
-  let whyUse = 'Projeto altamente ativo no GitHub com forte suporte da comunidade.';
+  let category = 'Software Open-Source';
+  let purpose = 'Código 100% gratuito e livre para usar, modificar e integrar.';
+  let whyUse = 'Projeto gratuito sem paywalls, altamente avaliado pela comunidade dev.';
 
-  // Deep Contextual Analysis Rules
   if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
-    category = 'Agente de IA';
-    purpose = 'Criar e executar agentes autônomos que realizam tarefas complexas usando LLMs (OpenAI, Claude, etc.).';
-    whyUse = 'Permite criar fluxos de IA sem precisar construir toda a arquitetura do zero.';
+    category = 'Agente de IA (Grátis)';
+    purpose = 'Framework open-source para criar agentes de IA autônomos sem pagar licenças de terceiros.';
+    whyUse = 'Permite ter seu próprio sistema de IA rodando localmente de graça.';
   } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui') || topicsStr.includes('tailwind')) {
-    category = 'Biblioteca Visual (UI)';
-    purpose = 'Componentes e elementos de interface prontos para construir webapps modernos e responsivos.';
-    whyUse = 'Acelera a criação do frontend mantendo alto padrão de design e personalização.';
+    category = 'Componentes UI (Grátis)';
+    purpose = 'Interface e componentes visuais 100% gratuitos para construir sistemas web modernos.';
+    whyUse = 'Acelera a criação do frontend sem custos de licença ou mensalidades.';
   } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres')) {
-    category = 'Banco de Dados / Armazenamento';
-    purpose = 'Gerenciar, indexar e consultar grandes volumes de dados com alta eficiência.';
-    whyUse = 'Oferece alta velocidade de leitura/escrita e integração simples com o backend.';
+    category = 'Banco de Dados (Open Source)';
+    purpose = 'Armazenar e consultar dados de forma gratuita, segura e escalável.';
+    whyUse = 'Código aberto com controle total dos seus dados sem surpresas no orçamento.';
   } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
-    category = 'Ferramenta CLI (Terminal)';
-    purpose = 'Executar comandos rápidos no terminal para automação, build ou monitoramento.';
-    whyUse = 'Reduz trabalho manual repetitivo no fluxo diário do desenvolvedor.';
+    category = 'Ferramenta CLI (Grátis)';
+    purpose = 'Utilitário de terminal open-source para automação diária de tarefas.';
+    whyUse = 'Ferramenta leve, gratuita e totalmente customizável.';
   } else if (topicsStr.includes('scraper') || topicsStr.includes('crawler') || nameLower.includes('scrape')) {
-    category = 'Extrator de Dados (Scraper)';
-    purpose = 'Extrair e estruturar informações automaticamente de páginas web e APIs.';
-    whyUse = 'Captura dados da internet de forma rápida lidando com bloqueios e paginação.';
-  } else if (lang === 'Python') {
-    category = 'Ferramenta Python';
-    purpose = 'Módulos e utilitários de alta performance desenvolvidos em Python.';
-    whyUse = 'Fácil de instalar (`pip install`) e simples de integrar em qualquer projeto.';
-  } else if (lang === 'TypeScript' || lang === 'JavaScript') {
-    category = 'Pacote JS / TS';
-    purpose = 'Solução pronta para o ecossistema Web e Node.js.';
-    whyUse = 'Possui tipagem estática pronta e suporte total aos frameworks modernos (React, Next.js).';
-  } else if (lang === 'Rust') {
-    category = 'Motor em Rust (Baixa Latência)';
-    purpose = 'Software de altíssima velocidade e consumo mínimo de memória.';
-    whyUse = 'Garante performance extrema para sistemas críticos que exigem resposta imediata.';
+    category = 'Extrator de Dados (Open Source)';
+    purpose = 'Raspagem de dados web e extração gratuita sem pagar por planos de web scraping.';
+    whyUse = 'Economize dinheiro extraindo dados com sua própria infraestrutura livre.';
   }
 
-  const whatText = translatedDesc || `${category} desenvolvido em ${lang} com mais de ${repo.stargazers_count.toLocaleString('pt-BR')} estrelas no GitHub.`;
+  const whatText = translatedDesc || `${category} desenvolvido em ${lang} com código 100% aberto.`;
 
   const summaryObj = {
     what: whatText,
@@ -535,15 +570,16 @@ function openDetailModal(repo, summary) {
   dom.detailRepoLink.href = repo.html_url;
   dom.detailStars.textContent = repo.stargazers_count.toLocaleString('pt-BR');
   dom.detailForks.textContent = repo.forks_count.toLocaleString('pt-BR');
+  dom.detailLicense.textContent = repo.license ? repo.license.spdx_id || repo.license.name : 'MIT (Grátis)';
   dom.detailIssues.textContent = repo.open_issues_count ? repo.open_issues_count.toLocaleString('pt-BR') : '0';
   dom.detailLang.textContent = repo.language || 'Geral';
 
   dom.detailDescPt.innerHTML = `
     <div class="detail-breakdown-box">
+      <p class="breakdown-item"><strong>🟢 Status da Licença:</strong> <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis &amp; Open-Source (${repo.license ? repo.license.name : 'MIT'})</span></p>
       <p class="breakdown-item"><strong>📌 O que o projeto faz:</strong> ${escapeHtml(summary.what)}</p>
       <p class="breakdown-item"><strong>🎯 Qual problema ele resolve:</strong> ${escapeHtml(summary.purpose)}</p>
       <p class="breakdown-item"><strong>⚡ Por que ele vale a pena:</strong> ${escapeHtml(summary.whyUse)}</p>
-      <p class="breakdown-item"><strong>🛠️ Categoria:</strong> <span class="badge-category">${escapeHtml(summary.category)}</span> | Linguagem: <strong>${repo.language || 'Código Aberto'}</strong></p>
     </div>
   `;
 
@@ -577,18 +613,18 @@ function generateProjectIdeas(repo, summary) {
   return [
     {
       icon: 'fa-solid fa-plug',
-      title: '1. Módulo para os Nossos Projetos',
-      desc: `Integrar a funcionalidade de "${summary.purpose}" como um módulo nos nossos códigos atuais.`
+      title: '1. Usar Código Grátis no Nosso Projeto',
+      desc: `Aproveitar o código fonte open-source de "${repo.name}" sem custos de licença nos nossos sistemas.`
     },
     {
       icon: 'fa-solid fa-cube',
-      title: '2. Criar Produto / SaaS',
-      desc: `Desenvolver um painel web amigável por cima deste repositório para vender ou liberar como serviço.`
+      title: '2. Criar Aplicação / SaaS com Base Grátis',
+      desc: `Desenvolver uma solução em cima deste repositório sem pagar royalties ou mensalidades.`
     },
     {
       icon: 'fa-solid fa-wand-magic-sparkles',
-      title: '3. Automação com a IA Antigravity',
-      desc: `Conectar os recursos deste repositório com o nosso assistente de IA para operar em segundo plano.`
+      title: '3. Automação Gratuita com a IA',
+      desc: `Conectar este código open-source com a IA Antigravity para automatizar o uso.`
     }
   ];
 }
@@ -607,6 +643,7 @@ function toggleFavorite(repo, summary) {
       summary_what: summary.what,
       summary_purpose: summary.purpose,
       summary_why: summary.whyUse,
+      license: repo.license ? repo.license.name : 'MIT',
       language: repo.language,
       stars: repo.stargazers_count,
       forks: repo.forks_count,
@@ -653,6 +690,7 @@ function renderFavoriteList() {
     item.innerHTML = `
       <div class="fav-item-info">
         <h4><a href="${fav.html_url}" target="_blank" style="color:#fff; text-decoration:none;">${fav.full_name}</a> <span style="font-size:0.8rem; color:var(--accent-gold);">★ ${formatNumber(fav.stars)}</span></h4>
+        <p><strong>🟢 Licença:</strong> ${fav.license || 'Open-Source Grátis'}</p>
         <p><strong>📌 O que é:</strong> ${escapeHtml(fav.summary_what || 'Sem descrição')}</p>
         <p><strong>🎯 Para que serve:</strong> ${escapeHtml(fav.summary_purpose || 'Utilitário de desenvolvimento')}</p>
       </div>
@@ -692,13 +730,14 @@ function generateAiMarkdown() {
     return 'Nenhum repositório marcado como interessante para exportar.';
   }
 
-  let md = `Olá Antigravity! Analisei os seguintes repositórios no GitHub e selecionei os marcados abaixo com suas análises detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
+  let md = `Olá Antigravity! Analisei os seguintes repositórios Open-Source 100% GRATUITOS no GitHub e selecionei os marcados abaixo com suas análises detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
 
   state.favorites.forEach((fav, index) => {
     md += `### ${index + 1}. [${fav.full_name}](${fav.html_url})\n`;
+    md += `- **📜 Licença**: ${fav.license || 'MIT / Open Source (100% Grátis)'}\n`;
     md += `- **📌 O que é**: ${fav.summary_what}\n`;
     md += `- **🎯 Para que serve**: ${fav.summary_purpose}\n`;
-    md += `- **⚡ Por que usar**: ${fav.summary_why || 'Alta popularidade no GitHub'}\n`;
+    md += `- **⚡ Por que usar**: ${fav.summary_why || 'Código aberto sem custos'}\n`;
     md += `- **Linguagem**: ${fav.language || 'N/A'}\n`;
     md += `- **Estrelas**: ${fav.stars.toLocaleString('pt-BR')} | **Forks**: ${fav.forks.toLocaleString('pt-BR')}\n`;
     if (fav.topics && fav.topics.length > 0) {
@@ -707,7 +746,7 @@ function generateAiMarkdown() {
     md += `\n`;
   });
 
-  md += `---\nO que você acha desses projetos? Qual deles tem o maior potencial de integração ou inspirar algo novo para o nosso escopo? Como podemos aperfeiçoar essas ideias?`;
+  md += `---\nComo podemos utilizar esses códigos open-source 100% gratuitos para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
 
   return md;
 }
@@ -719,7 +758,7 @@ function updateAiMarkdownPreview() {
 function copyAiMarkdownToClipboard() {
   const text = generateAiMarkdown();
   navigator.clipboard.writeText(text).then(() => {
-    showToast('Resumo detalhado em Português copiado! Cole no chat para debatermos.');
+    showToast('Resumo Open-Source em Português copiado! Cole no chat para debatermos.');
   }).catch(err => {
     console.error('Erro ao copiar:', err);
     showToast('Não foi possível copiar automaticamente. Selecione o texto na caixa.');
