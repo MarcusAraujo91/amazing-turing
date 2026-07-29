@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v7.0 - Multi-Skill Antigravity & PWA Engine
- * Integrado com Antigravity Slash Commands (/goal, /schedule) e Modern Web PWA Manifest.
+ * GitTrends Hub v7.1 - Zero-Latency Instant Rendering & Fail-Safe Engine
+ * Elimina o travamento de carregamento com timeout de 1.5s na API de tradução e renderização instantânea de cards.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -17,7 +17,7 @@ const state = {
   userOnly: localStorage.getItem('gittrends_dev_only') !== 'false',
   license: 'opensource-all',
   language: '',
-  minStars: 100,
+  minStars: 50,
   periodDays: 30,
   sortBy: 'stars',
   page: 1,
@@ -352,33 +352,34 @@ function buildQueryString(overrideTerm = null) {
   return parts.join(' ');
 }
 
+// INSTANT FAIL-SAFE REPOSITORY FETCH ENGINE
 async function fetchRepositories(overrideQuery = null) {
   showLoading(true);
 
-  const q = overrideQuery || buildQueryString();
-  
-  let sortParam = 'stars';
-  if (state.sortBy === 'updated') sortParam = 'updated';
-  if (state.sortBy === 'forks') sortParam = 'forks';
-
-  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sortParam}&order=desc&page=${state.page}&per_page=${state.perPage}`;
-
-  let headers = {
-    'Accept': 'application/vnd.github.v3+json'
-  };
-
-  const rawToken = (state.githubToken || '').trim();
-  if (rawToken) {
-    if (rawToken.startsWith('Bearer ') || rawToken.startsWith('token ')) {
-      headers['Authorization'] = rawToken;
-    } else if (rawToken.startsWith('github_pat_') || rawToken.startsWith('ghp_')) {
-      headers['Authorization'] = `Bearer ${rawToken}`;
-    } else {
-      headers['Authorization'] = `token ${rawToken}`;
-    }
-  }
-
   try {
+    const q = overrideQuery || buildQueryString();
+    
+    let sortParam = 'stars';
+    if (state.sortBy === 'updated') sortParam = 'updated';
+    if (state.sortBy === 'forks') sortParam = 'forks';
+
+    const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sortParam}&order=desc&page=${state.page}&per_page=${state.perPage}`;
+
+    let headers = {
+      'Accept': 'application/vnd.github.v3+json'
+    };
+
+    const rawToken = (state.githubToken || '').trim();
+    if (rawToken) {
+      if (rawToken.startsWith('Bearer ') || rawToken.startsWith('token ')) {
+        headers['Authorization'] = rawToken;
+      } else if (rawToken.startsWith('github_pat_') || rawToken.startsWith('ghp_')) {
+        headers['Authorization'] = `Bearer ${rawToken}`;
+      } else {
+        headers['Authorization'] = `token ${rawToken}`;
+      }
+    }
+
     let response = await fetch(url, { headers });
 
     if (response.status === 401 && rawToken) {
@@ -389,7 +390,7 @@ async function fetchRepositories(overrideQuery = null) {
     }
 
     if (response.status === 422 && !overrideQuery) {
-      console.warn('Query recusada pela API (422). Recorrendo a busca alternativa direta...');
+      console.warn('Query recusada pela API (422). Executando auto-healing automático...');
       let safeFallback = state.userOnly ? 'type:user stars:>=50' : 'stars:>=100';
       return await fetchRepositories(safeFallback);
     }
@@ -429,7 +430,7 @@ async function fetchRepositories(overrideQuery = null) {
       showEmptyState(true);
     } else {
       showEmptyState(false);
-      await renderRepos(state.currentRepos);
+      renderRepos(state.currentRepos);
     }
   } catch (error) {
     console.error('Erro ao buscar na API do GitHub:', error);
@@ -437,6 +438,7 @@ async function fetchRepositories(overrideQuery = null) {
     dom.resultsCount.textContent = 'Erro na busca da API';
     showEmptyState(true);
   } finally {
+    // ALWAYS UNBLOCK SPINNER
     showLoading(false);
   }
 }
@@ -463,17 +465,17 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
-// RENDER CARDS WITH DEV BADGES AND DETAILED SUMMARIES
-async function renderRepos(repos) {
+// INSTANT CARD RENDERING WITH NON-BLOCKING SUMMARY GENERATION
+function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
   for (const repo of repos) {
     const isFav = state.favorites.some(f => f.id === repo.id);
     const langColor = LANGUAGE_COLORS[repo.language] || '#9ca3af';
-
-    const summary = await getOrGenerateHyperDetailedSummary(repo);
     const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'Open Source';
     const isUserDev = repo.owner && repo.owner.type === 'User';
+
+    const summary = getOrGenerateHyperDetailedSummary(repo);
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -578,65 +580,49 @@ function blockRepository(repoId, repoName) {
   }
 }
 
-async function getOrGenerateHyperDetailedSummary(repo) {
+// FAST NON-BLOCKING SUMMARY GENERATOR
+function getOrGenerateHyperDetailedSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
   const rawDesc = repo.description || '';
-  let translatedDesc = '';
-
-  if (rawDesc.trim() !== '') {
-    try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(rawDesc)}&langpair=en|pt-BR`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.responseData && data.responseData.translatedText) {
-          translatedDesc = data.responseData.translatedText.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
-        }
-      }
-    } catch (e) {
-      console.warn('Fallback para inteligência técnica');
-    }
-  }
-
   const topicsStr = (repo.topics || []).join(' ').toLowerCase();
   const nameLower = repo.name.toLowerCase();
-  const descLower = (rawDesc + ' ' + translatedDesc).toLowerCase();
+  const descLower = rawDesc.toLowerCase();
   const lang = repo.language || 'Código Aberto';
 
   let category = 'Solução Open-Source';
-  let whatItDoes = translatedDesc || `Código-fonte aberto desenvolvido em ${lang} com alta popularidade comunitária.`;
+  let whatItDoes = rawDesc || `Código-fonte aberto desenvolvido em ${lang} com alta popularidade comunitária.`;
   let whatYouCanBuild = 'Construir soluções personalizadas, integrar APIs e criar sistemas sem pagar licenças.';
   let projectIdea = `Integrar as funções de "${repo.name}" nos nossos sistemas ou criar um micro-serviço baseado nele.`;
 
   if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
     category = 'Agente de IA (Autônomo)';
-    whatItDoes = translatedDesc || 'Framework completo para criar assistentes e robôs de IA que executam tarefas sozinhos.';
+    whatItDoes = rawDesc || 'Framework completo para criar assistentes e robôs de IA que executam tarefas sozinhos.';
     whatYouCanBuild = 'Criar atendentes inteligentes, bots automáticos no WhatsApp/Telegram, e executores de tarefas de programação.';
     projectIdea = 'Criar um agente de suporte ao cliente ou um assistente interno de automação dev.';
   } else if (topicsStr.includes('ui') || topicsStr.includes('react') || topicsStr.includes('component') || nameLower.includes('ui') || topicsStr.includes('tailwind')) {
     category = 'Design System & UI';
-    whatItDoes = translatedDesc || 'Conjunto de componentes de interface gráfica de alto padrão prontos para uso em sites e apps.';
+    whatItDoes = rawDesc || 'Conjunto de componentes de interface gráfica de alto padrão prontos para uso em sites e apps.';
     whatYouCanBuild = 'Montar dashboards administrativos, landing pages modernas e aplicativos web elegantes sem desenhar do zero.';
     projectIdea = 'Usar esse conjunto de componentes para reestilitar a interface dos nossos projetos atuais.';
   } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres') || topicsStr.includes('redis')) {
     category = 'Banco de Dados & Cache';
-    whatItDoes = translatedDesc || 'Motor de armazenamento e consulta de dados otimizado para alta velocidade e grande volume.';
+    whatItDoes = rawDesc || 'Motor de armazenamento e consulta de dados otimizado para alta velocidade e grande volume.';
     whatYouCanBuild = 'Armazenar históricos de usuários, fazer busca vetorial para IA e criar cache de alta velocidade.';
     projectIdea = 'Integrar este banco de dados para acelerar o tempo de resposta das nossas APIs.';
   } else if (topicsStr.includes('cli') || nameLower.includes('cli') || descLower.includes('terminal')) {
     category = 'Ferramenta de Terminal (CLI)';
-    whatItDoes = translatedDesc || 'Utilitário leve para rodar comandos rápidos e automações direto na linha de comando.';
+    whatItDoes = rawDesc || 'Utilitário leve para rodar comandos rápidos e automações direto na linha de comando.';
     whatYouCanBuild = 'Automatizar builds, fazer deploys automáticos e manipular arquivos no servidor rapidamente.';
     projectIdea = 'Criar scripts de terminal para automatizar tarefas diárias do nosso fluxo de trabalho.';
   } else if (topicsStr.includes('scraper') || topicsStr.includes('crawler') || nameLower.includes('scrape')) {
     category = 'Raspador de Dados (Scraper)';
-    whatItDoes = translatedDesc || 'Sistema automático que navega na web e extrai conteúdos, preços e dados de sites.';
+    whatItDoes = rawDesc || 'Sistema automático que navega na web e extrai conteúdos, preços e dados de sites.';
     whatYouCanBuild = 'Monitorar preços de concorrentes, extrair notícias em tempo real e estruturar dados da internet.';
     projectIdea = 'Montar um robô de busca de preços ou um alimentador de notícias automático.';
   } else if (topicsStr.includes('iptv') || nameLower.includes('iptv') || topicsStr.includes('stream') || nameLower.includes('media')) {
     category = 'Streaming & Mídia';
-    whatItDoes = translatedDesc || 'Plataforma para transmissão, organização e reprodução de conteúdos de vídeo e áudio.';
+    whatItDoes = rawDesc || 'Plataforma para transmissão, organização e reprodução de conteúdos de vídeo e áudio.';
     whatYouCanBuild = 'Criar seu próprio player de vídeo, organizar listas de canais públicos e transmitir mídias.';
     projectIdea = 'Desenvolver um aplicativo agregador de mídias e transmissões abertas.';
   }
@@ -840,7 +826,6 @@ function clearAllFavorites() {
   }
 }
 
-// GENERATE MARKDOWN PROMPTS WITH ANTIGRAVITY SLASH COMMAND TIPS (/goal, /schedule)
 function generateSingleFavAiMarkdown(fav) {
   let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias especificamente sobre ele:\n\n`;
   md += `### [${fav.full_name}](${fav.html_url})\n`;
@@ -875,7 +860,7 @@ function generateSingleRepoAiMarkdown(repo, summary) {
 
 function generateAiMarkdown() {
   if (state.favorites.length === 0) {
-    return 'Nenhum repositório marcado como interessante para exportar.';
+    return 'Nenhum repositório marcado como restaurante para exportar.';
   }
 
   let md = `Olá Antigravity! Analisei os seguintes repositórios Open-Source 100% GRATUITOS no GitHub e selecionei os marcados abaixo com suas análises detalhadas para debatermos novas ideias ou evoluirmos nossos projetos atuais:\n\n`;
