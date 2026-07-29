@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v4.3 - Bulletproof GitHub Search & Auto-Healing Engine
- * Sintaxe 100% compatível com a API do GitHub + Fallback inteligente anti-erro HTTP 422
+ * GitTrends Hub v5.0 - Individual Developer Filter & Hyper-Detailed Engine
+ * Suporte a filtro exclusivo de Devs Autônomos (repo.owner.type === 'User') eliminando empresas/organizações.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -14,6 +14,7 @@ const state = {
   query: '',
   preset: 'trending-today',
   freeOnly: true,
+  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false', // Default true: Somente Devs Autônomos
   license: 'opensource-all',
   language: '',
   minStars: 100,
@@ -57,6 +58,7 @@ const dom = {
   searchInput: document.getElementById('search-input'),
   btnClearSearch: document.getElementById('btn-clear-search'),
   toggleFreeOnly: document.getElementById('toggle-free-only'),
+  toggleUserOnly: document.getElementById('toggle-user-only'),
   toggleAutoTranslate: document.getElementById('toggle-auto-translate'),
   presetChips: document.querySelectorAll('.chip'),
   filterLicense: document.getElementById('filter-license'),
@@ -118,6 +120,9 @@ const dom = {
 
 // INIT APP
 document.addEventListener('DOMContentLoaded', () => {
+  if (dom.toggleUserOnly) {
+    dom.toggleUserOnly.checked = state.userOnly;
+  }
   initEventListeners();
   updateFavBadge();
   if (state.githubToken) {
@@ -155,6 +160,15 @@ function initEventListeners() {
     state.page = 1;
     fetchRepositories();
   });
+
+  if (dom.toggleUserOnly) {
+    dom.toggleUserOnly.addEventListener('change', (e) => {
+      state.userOnly = e.target.checked;
+      localStorage.setItem('gittrends_dev_only', state.userOnly);
+      state.page = 1;
+      fetchRepositories();
+    });
+  }
 
   dom.toggleAutoTranslate.addEventListener('change', (e) => {
     state.autoTranslate = e.target.checked;
@@ -270,7 +284,6 @@ function initEventListeners() {
   });
 }
 
-// BULLETPROOF GITHUB API QUERY BUILDER
 function buildQueryString(fallbackTerm = null) {
   if (fallbackTerm) return fallbackTerm;
 
@@ -309,6 +322,10 @@ function buildQueryString(fallbackTerm = null) {
     }
   }
 
+  if (state.userOnly) {
+    parts.push('type:user');
+  }
+
   if (state.freeOnly && state.license !== 'opensource-all') {
     parts.push(`license:${state.license}`);
   }
@@ -324,7 +341,7 @@ function buildQueryString(fallbackTerm = null) {
   return parts.join(' ');
 }
 
-// FETCH REPOSITORIES WITH DUAL TOKEN SUPPORT & SILENT AUTO-HEALING RETRY ON 422
+// FETCH REPOSITORIES WITH DEDICATED DEV ONLY FILTER (repo.owner.type === 'User')
 async function fetchRepositories(overrideQuery = null) {
   showLoading(true);
 
@@ -350,7 +367,6 @@ async function fetchRepositories(overrideQuery = null) {
   try {
     let response = await fetch(url, { headers });
 
-    // 1. Handle Invalid Token (HTTP 401)
     if (response.status === 401 && rawToken) {
       console.warn('Token do GitHub inválido. Fazendo busca anônima de segurança...');
       showToast('Token inválido. Fazendo busca pública automática.');
@@ -358,15 +374,9 @@ async function fetchRepositories(overrideQuery = null) {
       response = await fetch(url, { headers });
     }
 
-    // 2. Handle HTTP 422 (Unprocessable Query) -> SILENT AUTO-HEALING RETRY WITH CLEAN SEARCH QUERY
     if (response.status === 422 && !overrideQuery) {
       console.warn('Query recusada pela API (422). Executando auto-healing automático...');
-      let safeFallback = 'agent stars:>=50';
-      if (state.preset === 'frontend-tools') safeFallback = 'frontend stars:>=50';
-      if (state.preset === 'dev-tools') safeFallback = 'devtools stars:>=50';
-      if (state.preset === 'backend-db') safeFallback = 'database stars:>=50';
-      if (state.preset === 'trending-today' || state.preset === 'trending-week') safeFallback = 'stars:>=100';
-
+      let safeFallback = state.userOnly ? 'type:user stars:>=50' : 'stars:>=100';
       return await fetchRepositories(safeFallback);
     }
 
@@ -384,15 +394,22 @@ async function fetchRepositories(overrideQuery = null) {
     const data = await response.json();
     let rawItems = data.items || [];
 
+    // FILTER OUT USER BLOCKED REPOSITORIES
     rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
 
+    // STRICT CLIENT-SIDE FILTER FOR INDIVIDUAL DEVS ONLY (repo.owner.type === 'User')
+    if (state.userOnly) {
+      rawItems = rawItems.filter(repo => repo.owner && repo.owner.type === 'User');
+    }
+
+    // STRICT CLIENT FILTER FOR FREE OPEN SOURCE ONLY
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
     }
 
     state.currentRepos = rawItems.slice(0, 12);
     
-    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios Open-Source gratuitos encontrados`;
+    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios ${state.userOnly ? 'de Devs Autônomos' : ''} encontrados`;
     dom.pageIndicator.textContent = `Página ${state.page}`;
     dom.btnPrevPage.disabled = state.page === 1;
     dom.btnNextPage.disabled = rawItems.length === 0;
@@ -435,7 +452,7 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
-// RENDER CARDS WITH HYPER-DETAILED SUMMARIES
+// RENDER CARDS WITH DEV BADGES AND DETAILED SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -445,6 +462,7 @@ async function renderRepos(repos) {
 
     const summary = await getOrGenerateHyperDetailedSummary(repo);
     const licenseName = repo.license ? repo.license.spdx_id || repo.license.name : 'Open Source';
+    const isUserDev = repo.owner && repo.owner.type === 'User';
 
     const card = document.createElement('div');
     card.className = 'repo-card';
@@ -474,7 +492,9 @@ async function renderRepos(repos) {
         <div class="repo-description-box">
           <div class="summary-badge-header">
             <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${licenseName})</span>
-            <span class="category-pill">${summary.category}</span>
+            <span class="dev-badge ${isUserDev ? 'is-user-dev' : 'is-org'}">
+              ${isUserDev ? '<i class="fa-solid fa-user text-blue"></i> Dev Autônomo' : '<i class="fa-solid fa-building text-purple"></i> Empresa / Org'}
+            </span>
           </div>
 
           <div class="deep-summary-preview">
