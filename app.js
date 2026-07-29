@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v4.1 - Ultra-Resilient GitHub Search & Authentication Engine
- * Suporte a Tokens Fine-Grained (github_pat_) e Classic (ghp_), com fallback automático contra erros HTTP 401/403.
+ * GitTrends Hub v4.2 - GitHub Search API 422 Query Fix
+ * Corrigida a sintaxe dos filtros preset (IA & Agentes, Frontend, DevTools, Backend) para garantir respostas HTTP 200 OK
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -270,6 +270,7 @@ function initEventListeners() {
   });
 }
 
+// BUILD GITHUB API COMPLIANT SEARCH QUERIES WITHOUT TRIGGERING 422
 function buildQueryString() {
   const parts = [];
 
@@ -292,16 +293,16 @@ function buildQueryString() {
         parts.push(`created:>${lastMonth}`);
         break;
       case 'ai-agents':
-        parts.push(`(agent OR llm OR ai OR rag OR openai OR claude OR gemini)`);
+        parts.push('agent OR llm OR ai OR rag');
         break;
       case 'frontend-tools':
-        parts.push(`(ui OR frontend OR react OR vue OR tailwind OR component OR webapp)`);
+        parts.push('ui OR frontend OR react OR vue OR tailwind');
         break;
       case 'dev-tools':
-        parts.push(`(cli OR tool OR devops OR terminal OR docker OR compiler)`);
+        parts.push('cli OR devops OR docker OR terminal');
         break;
       case 'backend-db':
-        parts.push(`(database OR postgres OR redis OR backend OR api OR graphql)`);
+        parts.push('database OR postgres OR redis OR backend');
         break;
     }
   }
@@ -335,7 +336,6 @@ async function fetchRepositories() {
 
   const rawToken = (state.githubToken || '').trim();
   if (rawToken) {
-    // Supports both 'Bearer <token>' for fine-grained/classic and 'token <token>'
     if (rawToken.startsWith('Bearer ') || rawToken.startsWith('token ')) {
       headers['Authorization'] = rawToken;
     } else if (rawToken.startsWith('github_pat_') || rawToken.startsWith('ghp_')) {
@@ -348,7 +348,7 @@ async function fetchRepositories() {
   try {
     let response = await fetch(url, { headers });
 
-    // Handle Invalid Token (HTTP 401) or Bad Authentication
+    // Handle Invalid Token (HTTP 401)
     if (response.status === 401 && rawToken) {
       console.warn('Token do GitHub inválido. Fazendo busca anônima de segurança...');
       showToast('Token inválido. Fazendo busca pública automática.');
@@ -363,6 +363,9 @@ async function fetchRepositories() {
     if (!response.ok) {
       if (response.status === 403) {
         throw new Error('Limite da API do GitHub atingido ou token sem permissões suficientes.');
+      }
+      if (response.status === 422) {
+        throw new Error('Termos de busca incompatíveis na API. Tente limpar os filtros ou selecionar outro preset.');
       }
       throw new Error(`Erro na busca (${response.status}): ${response.statusText}`);
     }
@@ -573,7 +576,7 @@ async function getOrGenerateHyperDetailedSummary(repo) {
     category = 'Design System & UI';
     whatItDoes = translatedDesc || 'Conjunto de componentes de interface gráfica de alto padrão prontos para uso em sites e apps.';
     whatYouCanBuild = 'Montar dashboards administrativos, landing pages modernas e aplicativos web elegantes sem desenhar do zero.';
-    projectIdea = 'Usar esse conjunto de componentes para reestilizar a interface dos nossos projetos atuais.';
+    projectIdea = 'Usar esse conjunto de componentes para reestilitar a interface dos nossos projetos atuais.';
   } else if (topicsStr.includes('database') || topicsStr.includes('sql') || topicsStr.includes('orm') || nameLower.includes('db') || topicsStr.includes('postgres') || topicsStr.includes('redis')) {
     category = 'Banco de Dados & Cache';
     whatItDoes = translatedDesc || 'Motor de armazenamento e consulta de dados otimizado para alta velocidade e grande volume.';
