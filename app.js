@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v4.0 - Hyper-Detailed Card Summaries & Actionable Use Cases Engine
- * Exibe resumos ultra-detalhados nos cards: O que faz + O que dá para fazer (Casos de Uso) + Ideia Rápida de Projeto
+ * GitTrends Hub v4.1 - Ultra-Resilient GitHub Search & Authentication Engine
+ * Suporte a Tokens Fine-Grained (github_pat_) e Classic (ghp_), com fallback automático contra erros HTTP 401/403.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -321,6 +321,7 @@ function buildQueryString() {
   return parts.join(' ');
 }
 
+// FETCH REPOSITORIES WITH DUAL TOKEN FORMAT SUPPORT & AUTOMATIC ANONYMOUS FALLBACK
 async function fetchRepositories() {
   showLoading(true);
 
@@ -328,15 +329,32 @@ async function fetchRepositories() {
   const sortParam = state.sortBy === 'updated' ? 'updated' : (state.sortBy === 'forks' ? 'forks' : 'stars');
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sortParam}&order=desc&page=${state.page}&per_page=${state.perPage}`;
 
-  const headers = {
+  let headers = {
     'Accept': 'application/vnd.github.v3+json'
   };
-  if (state.githubToken) {
-    headers['Authorization'] = `token ${state.githubToken}`;
+
+  const rawToken = (state.githubToken || '').trim();
+  if (rawToken) {
+    // Supports both 'Bearer <token>' for fine-grained/classic and 'token <token>'
+    if (rawToken.startsWith('Bearer ') || rawToken.startsWith('token ')) {
+      headers['Authorization'] = rawToken;
+    } else if (rawToken.startsWith('github_pat_') || rawToken.startsWith('ghp_')) {
+      headers['Authorization'] = `Bearer ${rawToken}`;
+    } else {
+      headers['Authorization'] = `token ${rawToken}`;
+    }
   }
 
   try {
-    const response = await fetch(url, { headers });
+    let response = await fetch(url, { headers });
+
+    // Handle Invalid Token (HTTP 401) or Bad Authentication
+    if (response.status === 401 && rawToken) {
+      console.warn('Token do GitHub inválido. Fazendo busca anônima de segurança...');
+      showToast('Token inválido. Fazendo busca pública automática.');
+      headers = { 'Accept': 'application/vnd.github.v3+json' };
+      response = await fetch(url, { headers });
+    }
 
     const limit = response.headers.get('X-RateLimit-Limit') || '60';
     const remaining = response.headers.get('X-RateLimit-Remaining') || '--';
@@ -344,9 +362,9 @@ async function fetchRepositories() {
 
     if (!response.ok) {
       if (response.status === 403) {
-        throw new Error('Limite da API atingido. Adicione um GitHub Token no topo para liberar 5.000 buscas/hora.');
+        throw new Error('Limite da API do GitHub atingido ou token sem permissões suficientes.');
       }
-      throw new Error(`Erro na busca: ${response.statusText}`);
+      throw new Error(`Erro na busca (${response.status}): ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -374,7 +392,7 @@ async function fetchRepositories() {
   } catch (error) {
     console.error('Erro ao buscar repositórios:', error);
     showToast(error.message || 'Erro ao carregar dados do GitHub');
-    dom.resultsCount.textContent = 'Erro ao carregar';
+    dom.resultsCount.textContent = 'Erro na busca';
     showEmptyState(true);
   } finally {
     showLoading(false);
@@ -403,7 +421,7 @@ function isRepoStrictlyFreeOpenSource(repo) {
   return true;
 }
 
-// RENDER CARDS WITH ENRICHED ACTIONABLE SUMMARIES (WHAT IT DOES + WHAT YOU CAN BUILD WITH IT)
+// RENDER CARDS WITH HYPER-DETAILED SUMMARIES
 async function renderRepos(repos) {
   dom.repoGrid.innerHTML = '';
 
@@ -439,7 +457,6 @@ async function renderRepos(repos) {
           </div>
         </div>
 
-        <!-- EXPLICIT DETAILED SUMMARY BOX ON FRONT -->
         <div class="repo-description-box">
           <div class="summary-badge-header">
             <span class="free-badge"><i class="fa-solid fa-circle-check text-green"></i> 100% Grátis (${licenseName})</span>
@@ -478,13 +495,11 @@ async function renderRepos(repos) {
       </div>
     `;
 
-    // Click Card -> Opens directly on GitHub in a new tab
     card.addEventListener('click', (e) => {
       if (e.target.closest('.card-actions-top') || e.target.closest('.repo-name')) return;
       window.open(repo.html_url, '_blank');
     });
 
-    // Copy Link Button Click
     const copyLinkBtn = card.querySelector('.btn-copy-link-repo');
     copyLinkBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -518,7 +533,6 @@ function blockRepository(repoId, repoName) {
   }
 }
 
-// HYPER-DETAILED ANALYSIS ENGINE (Generates "O que faz", "O que dá para fazer", and "Ideia de Projeto")
 async function getOrGenerateHyperDetailedSummary(repo) {
   if (state.summaryCache[repo.id]) return state.summaryCache[repo.id];
 
@@ -550,7 +564,6 @@ async function getOrGenerateHyperDetailedSummary(repo) {
   let whatYouCanBuild = 'Construir soluções personalizadas, integrar APIs e criar sistemas sem pagar licenças.';
   let projectIdea = `Integrar as funções de "${repo.name}" nos nossos sistemas ou criar um micro-serviço baseado nele.`;
 
-  // Specific domain intelligence
   if (topicsStr.includes('agent') || nameLower.includes('agent') || descLower.includes('agent')) {
     category = 'Agente de IA (Autônomo)';
     whatItDoes = translatedDesc || 'Framework completo para criar assistentes e robôs de IA que executam tarefas sozinhos.';
