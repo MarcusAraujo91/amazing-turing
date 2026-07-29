@@ -1,7 +1,6 @@
 /**
- * GitTrends Hub v5.1 - Dynamic Real-Time Trending Engine
- * Algoritmo corrigido para evitar repetição diária dos mesmos repositórios gigantes.
- * Exibe projetos verdadeiramente em alta no dia e semana.
+ * GitTrends Hub v6.0 - 100% Native GitHub REST API Engine
+ * Todos os filtros constroem requisições reais diretamente para a API oficial do GitHub.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -15,12 +14,12 @@ const state = {
   query: '',
   preset: 'trending-today',
   freeOnly: true,
-  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false',
+  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false', // type:user
   license: 'opensource-all',
   language: '',
-  minStars: 50,
+  minStars: 100,
   periodDays: 30,
-  sortBy: 'updated', // Changed default to 'updated' for fresh daily discovery!
+  sortBy: 'stars', // stars, updated, forks
   page: 1,
   perPage: 24,
   autoTranslate: true,
@@ -204,6 +203,12 @@ function initEventListeners() {
     fetchRepositories();
   });
 
+  dom.filterPeriod.addEventListener('change', (e) => {
+    state.periodDays = parseInt(e.target.value, 10);
+    state.page = 1;
+    fetchRepositories();
+  });
+
   dom.filterSort.addEventListener('change', (e) => {
     state.sortBy = e.target.value;
     state.page = 1;
@@ -285,29 +290,31 @@ function initEventListeners() {
   });
 }
 
-// DYNAMIC TRENDING QUERY BUILDER FOR FRESH DAILY DISCOVERY
-function buildQueryString(fallbackTerm = null) {
-  if (fallbackTerm) return fallbackTerm;
+// 100% REAL GITHUB REST API SEARCH QUERY GENERATOR
+function buildQueryString(overrideTerm = null) {
+  if (overrideTerm) return overrideTerm;
 
   const parts = [];
 
+  // 1. Text Search Input
   if (state.query) {
     parts.push(state.query);
   }
 
+  // 2. Preset Category Chips (mapped directly to real GitHub search qualifiers)
   if (!state.query) {
     switch (state.preset) {
       case 'trending-today':
-        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        parts.push(`pushed:>${threeDaysAgo}`);
+        const dateToday = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        parts.push(`pushed:>${dateToday}`);
         break;
       case 'trending-week':
-        const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        parts.push(`pushed:>${lastWeek}`);
+        const dateWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        parts.push(`pushed:>${dateWeek}`);
         break;
       case 'new-stars':
-        const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        parts.push(`created:>${lastMonth}`);
+        const dateMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        parts.push(`created:>${dateMonth}`);
         break;
       case 'ai-agents':
         parts.push('agent');
@@ -324,33 +331,46 @@ function buildQueryString(fallbackTerm = null) {
     }
   }
 
+  // 3. User Only Filter (type:user filters out corporate orgs directly on GitHub's API)
   if (state.userOnly) {
     parts.push('type:user');
   }
 
+  // 4. Specific License Filter
   if (state.freeOnly && state.license !== 'opensource-all') {
     parts.push(`license:${state.license}`);
   }
 
+  // 5. Programming Language Filter (language:python, language:javascript, etc.)
   if (state.language) {
     parts.push(`language:${state.language}`);
   }
 
+  // 6. Minimum Stars Filter (stars:>=100)
   if (state.minStars > 0) {
     parts.push(`stars:>=${state.minStars}`);
+  }
+
+  // 7. Time Period Filter (if preset is not already setting date)
+  if (state.preset !== 'trending-today' && state.preset !== 'trending-week' && state.preset !== 'new-stars' && state.periodDays > 0) {
+    const periodDate = new Date(Date.now() - state.periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    parts.push(`pushed:>${periodDate}`);
   }
 
   return parts.join(' ');
 }
 
-// FETCH REPOSITORIES WITH REAL-TIME SORTING & DEV FILTER
+// EXECUTE 100% REAL GITHUB REST API FETCH
 async function fetchRepositories(overrideQuery = null) {
   showLoading(true);
 
   const q = overrideQuery || buildQueryString();
   
-  // Dynamic sort parameter: 'updated' gives fresh daily updates, 'stars' gives top all-time
-  const sortParam = state.sortBy === 'stars' ? 'stars' : (state.sortBy === 'forks' ? 'forks' : 'updated');
+  // Real GitHub API Sort Parameters: sort=stars, sort=updated, sort=forks
+  let sortParam = 'stars';
+  if (state.sortBy === 'updated') sortParam = 'updated';
+  if (state.sortBy === 'forks') sortParam = 'forks';
+
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sortParam}&order=desc&page=${state.page}&per_page=${state.perPage}`;
 
   let headers = {
@@ -371,6 +391,7 @@ async function fetchRepositories(overrideQuery = null) {
   try {
     let response = await fetch(url, { headers });
 
+    // Handle Invalid Token (HTTP 401)
     if (response.status === 401 && rawToken) {
       console.warn('Token do GitHub inválido. Fazendo busca anônima de segurança...');
       showToast('Token inválido. Fazendo busca pública automática.');
@@ -378,8 +399,9 @@ async function fetchRepositories(overrideQuery = null) {
       response = await fetch(url, { headers });
     }
 
+    // Handle HTTP 422 (Unprocessable Query) -> Real API Auto-Healing Fallback
     if (response.status === 422 && !overrideQuery) {
-      console.warn('Query recusada pela API (422). Executando auto-healing automático...');
+      console.warn('Query recusada pela API (422). Recorrendo a busca alternativa direta...');
       let safeFallback = state.userOnly ? 'type:user stars:>=50' : 'stars:>=100';
       return await fetchRepositories(safeFallback);
     }
@@ -392,7 +414,7 @@ async function fetchRepositories(overrideQuery = null) {
       if (response.status === 403) {
         throw new Error('Limite da API do GitHub atingido ou token sem permissões suficientes.');
       }
-      throw new Error(`Erro na busca (${response.status}): ${response.statusText}`);
+      throw new Error(`Erro na API (${response.status}): ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -401,19 +423,19 @@ async function fetchRepositories(overrideQuery = null) {
     // FILTER OUT USER BLOCKED REPOSITORIES
     rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
 
-    // STRICT CLIENT-SIDE FILTER FOR INDIVIDUAL DEVS ONLY (repo.owner.type === 'User')
+    // STRICT CLIENT-SIDE DEV TYPE FILTER (repo.owner.type === 'User')
     if (state.userOnly) {
       rawItems = rawItems.filter(repo => repo.owner && repo.owner.type === 'User');
     }
 
-    // STRICT CLIENT FILTER FOR FREE OPEN SOURCE ONLY
+    // STRICT CLIENT LICENSE & PAYWALL FILTER
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
     }
 
     state.currentRepos = rawItems.slice(0, 12);
     
-    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios ${state.userOnly ? 'de Devs Autônomos' : ''} encontrados`;
+    dom.resultsCount.textContent = `${state.currentRepos.length} repositórios ${state.userOnly ? 'de Devs Autônomos' : ''} encontrados via API`;
     dom.pageIndicator.textContent = `Página ${state.page}`;
     dom.btnPrevPage.disabled = state.page === 1;
     dom.btnNextPage.disabled = rawItems.length === 0;
@@ -425,9 +447,9 @@ async function fetchRepositories(overrideQuery = null) {
       await renderRepos(state.currentRepos);
     }
   } catch (error) {
-    console.error('Erro ao buscar repositórios:', error);
+    console.error('Erro ao buscar na API do GitHub:', error);
     showToast(error.message || 'Erro ao carregar dados do GitHub');
-    dom.resultsCount.textContent = 'Erro na busca';
+    dom.resultsCount.textContent = 'Erro na busca da API';
     showEmptyState(true);
   } finally {
     showLoading(false);
