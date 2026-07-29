@@ -1,6 +1,7 @@
 /**
- * GitTrends Hub v5.0 - Individual Developer Filter & Hyper-Detailed Engine
- * Suporte a filtro exclusivo de Devs Autônomos (repo.owner.type === 'User') eliminando empresas/organizações.
+ * GitTrends Hub v5.1 - Dynamic Real-Time Trending Engine
+ * Algoritmo corrigido para evitar repetição diária dos mesmos repositórios gigantes.
+ * Exibe projetos verdadeiramente em alta no dia e semana.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -14,12 +15,12 @@ const state = {
   query: '',
   preset: 'trending-today',
   freeOnly: true,
-  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false', // Default true: Somente Devs Autônomos
+  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false',
   license: 'opensource-all',
   language: '',
-  minStars: 100,
+  minStars: 50,
   periodDays: 30,
-  sortBy: 'stars',
+  sortBy: 'updated', // Changed default to 'updated' for fresh daily discovery!
   page: 1,
   perPage: 24,
   autoTranslate: true,
@@ -284,6 +285,7 @@ function initEventListeners() {
   });
 }
 
+// DYNAMIC TRENDING QUERY BUILDER FOR FRESH DAILY DISCOVERY
 function buildQueryString(fallbackTerm = null) {
   if (fallbackTerm) return fallbackTerm;
 
@@ -296,8 +298,8 @@ function buildQueryString(fallbackTerm = null) {
   if (!state.query) {
     switch (state.preset) {
       case 'trending-today':
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        parts.push(`pushed:>${yesterday}`);
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        parts.push(`pushed:>${threeDaysAgo}`);
         break;
       case 'trending-week':
         const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -341,12 +343,14 @@ function buildQueryString(fallbackTerm = null) {
   return parts.join(' ');
 }
 
-// FETCH REPOSITORIES WITH DEDICATED DEV ONLY FILTER (repo.owner.type === 'User')
+// FETCH REPOSITORIES WITH REAL-TIME SORTING & DEV FILTER
 async function fetchRepositories(overrideQuery = null) {
   showLoading(true);
 
   const q = overrideQuery || buildQueryString();
-  const sortParam = state.sortBy === 'updated' ? 'updated' : (state.sortBy === 'forks' ? 'forks' : 'stars');
+  
+  // Dynamic sort parameter: 'updated' gives fresh daily updates, 'stars' gives top all-time
+  const sortParam = state.sortBy === 'stars' ? 'stars' : (state.sortBy === 'forks' ? 'forks' : 'updated');
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sortParam}&order=desc&page=${state.page}&per_page=${state.perPage}`;
 
   let headers = {
