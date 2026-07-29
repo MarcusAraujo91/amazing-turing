@@ -1,0 +1,16 @@
+{
+  "name": "GitTrends Hub - Open Source",
+  "short_name": "GitTrends",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#10b981",
+  "description": "Feed de Repositórios GitHub Trending 100% Open Source e Gratuitos para Antigravity IA",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/github/explore/main/topics/github/github.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

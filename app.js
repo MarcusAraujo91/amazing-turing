@@ -1,6 +1,6 @@
 /**
- * GitTrends Hub v6.0 - 100% Native GitHub REST API Engine
- * Todos os filtros constroem requisições reais diretamente para a API oficial do GitHub.
+ * GitTrends Hub v7.0 - Multi-Skill Antigravity & PWA Engine
+ * Integrado com Antigravity Slash Commands (/goal, /schedule) e Modern Web PWA Manifest.
  */
 
 // APPROVED FREE OPEN SOURCE LICENSES (OSI Compliant)
@@ -14,12 +14,12 @@ const state = {
   query: '',
   preset: 'trending-today',
   freeOnly: true,
-  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false', // type:user
+  userOnly: localStorage.getItem('gittrends_dev_only') !== 'false',
   license: 'opensource-all',
   language: '',
   minStars: 100,
   periodDays: 30,
-  sortBy: 'stars', // stars, updated, forks
+  sortBy: 'stars',
   page: 1,
   perPage: 24,
   autoTranslate: true,
@@ -246,7 +246,7 @@ function initEventListeners() {
     const prompt = generateSingleRepoAiMarkdown(repo, summary);
 
     navigator.clipboard.writeText(prompt).then(() => {
-      showToast('Prompt deste repositório Open-Source copiado em Português!');
+      showToast('Prompt formatado para o Antigravity copiado com sucesso!');
     });
   });
 
@@ -290,18 +290,15 @@ function initEventListeners() {
   });
 }
 
-// 100% REAL GITHUB REST API SEARCH QUERY GENERATOR
 function buildQueryString(overrideTerm = null) {
   if (overrideTerm) return overrideTerm;
 
   const parts = [];
 
-  // 1. Text Search Input
   if (state.query) {
     parts.push(state.query);
   }
 
-  // 2. Preset Category Chips (mapped directly to real GitHub search qualifiers)
   if (!state.query) {
     switch (state.preset) {
       case 'trending-today':
@@ -331,27 +328,22 @@ function buildQueryString(overrideTerm = null) {
     }
   }
 
-  // 3. User Only Filter (type:user filters out corporate orgs directly on GitHub's API)
   if (state.userOnly) {
     parts.push('type:user');
   }
 
-  // 4. Specific License Filter
   if (state.freeOnly && state.license !== 'opensource-all') {
     parts.push(`license:${state.license}`);
   }
 
-  // 5. Programming Language Filter (language:python, language:javascript, etc.)
   if (state.language) {
     parts.push(`language:${state.language}`);
   }
 
-  // 6. Minimum Stars Filter (stars:>=100)
   if (state.minStars > 0) {
     parts.push(`stars:>=${state.minStars}`);
   }
 
-  // 7. Time Period Filter (if preset is not already setting date)
   if (state.preset !== 'trending-today' && state.preset !== 'trending-week' && state.preset !== 'new-stars' && state.periodDays > 0) {
     const periodDate = new Date(Date.now() - state.periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     parts.push(`pushed:>${periodDate}`);
@@ -360,13 +352,11 @@ function buildQueryString(overrideTerm = null) {
   return parts.join(' ');
 }
 
-// EXECUTE 100% REAL GITHUB REST API FETCH
 async function fetchRepositories(overrideQuery = null) {
   showLoading(true);
 
   const q = overrideQuery || buildQueryString();
   
-  // Real GitHub API Sort Parameters: sort=stars, sort=updated, sort=forks
   let sortParam = 'stars';
   if (state.sortBy === 'updated') sortParam = 'updated';
   if (state.sortBy === 'forks') sortParam = 'forks';
@@ -391,7 +381,6 @@ async function fetchRepositories(overrideQuery = null) {
   try {
     let response = await fetch(url, { headers });
 
-    // Handle Invalid Token (HTTP 401)
     if (response.status === 401 && rawToken) {
       console.warn('Token do GitHub inválido. Fazendo busca anônima de segurança...');
       showToast('Token inválido. Fazendo busca pública automática.');
@@ -399,7 +388,6 @@ async function fetchRepositories(overrideQuery = null) {
       response = await fetch(url, { headers });
     }
 
-    // Handle HTTP 422 (Unprocessable Query) -> Real API Auto-Healing Fallback
     if (response.status === 422 && !overrideQuery) {
       console.warn('Query recusada pela API (422). Recorrendo a busca alternativa direta...');
       let safeFallback = state.userOnly ? 'type:user stars:>=50' : 'stars:>=100';
@@ -420,15 +408,12 @@ async function fetchRepositories(overrideQuery = null) {
     const data = await response.json();
     let rawItems = data.items || [];
 
-    // FILTER OUT USER BLOCKED REPOSITORIES
     rawItems = rawItems.filter(repo => !state.blockedRepos.includes(repo.id));
 
-    // STRICT CLIENT-SIDE DEV TYPE FILTER (repo.owner.type === 'User')
     if (state.userOnly) {
       rawItems = rawItems.filter(repo => repo.owner && repo.owner.type === 'User');
     }
 
-    // STRICT CLIENT LICENSE & PAYWALL FILTER
     if (state.freeOnly) {
       rawItems = rawItems.filter(repo => isRepoStrictlyFreeOpenSource(repo));
     }
@@ -855,6 +840,7 @@ function clearAllFavorites() {
   }
 }
 
+// GENERATE MARKDOWN PROMPTS WITH ANTIGRAVITY SLASH COMMAND TIPS (/goal, /schedule)
 function generateSingleFavAiMarkdown(fav) {
   let md = `Olá Antigravity! Analisei este repositório no GitHub e gostaria de debater ideias especificamente sobre ele:\n\n`;
   md += `### [${fav.full_name}](${fav.html_url})\n`;
@@ -867,7 +853,7 @@ function generateSingleFavAiMarkdown(fav) {
   if (fav.topics && fav.topics.length > 0) {
     md += `- **Tópicos**: ${fav.topics.slice(0, 5).join(', ')}\n`;
   }
-  md += `\n---\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
+  md += `\n---\n💡 **Dica Antigravity**: Você pode usar o comando \`/goal\` para iniciar a construção autônoma dessa solução!\n\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
   return md;
 }
 
@@ -883,7 +869,7 @@ function generateSingleRepoAiMarkdown(repo, summary) {
   if (repo.topics && repo.topics.length > 0) {
     md += `- **Tópicos**: ${repo.topics.slice(0, 5).join(', ')}\n`;
   }
-  md += `\n---\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
+  md += `\n---\n💡 **Dica Antigravity**: Use o comando \`/goal\` no chat do Antigravity para transformar este repositório em uma meta completa de desenvolvimento autônomo.\n\nComo podemos utilizar este repositório open-source gratuito para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
   return md;
 }
 
@@ -908,7 +894,7 @@ function generateAiMarkdown() {
     md += `\n`;
   });
 
-  md += `---\nComo podemos utilizar esses códigos open-source 100% gratuitos para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
+  md += `---\n💡 **Dica Antigravity**: Você pode usar o comando \`/goal\` para pedir que eu crie um plano técnico de integração para todos estes repositórios!\n\nComo podemos utilizar esses códigos open-source 100% gratuitos para criar algo novo ou aperfeiçoar nossos projetos atuais?`;
 
   return md;
 }
@@ -920,7 +906,7 @@ function updateAiMarkdownPreview() {
 function copyAiMarkdownToClipboard() {
   const text = generateAiMarkdown();
   navigator.clipboard.writeText(text).then(() => {
-    showToast('Resumo Open-Source em Português copiado! Cole no chat para debatermos.');
+    showToast('Resumo Open-Source formatado para Antigravity copiado!');
   }).catch(err => {
     console.error('Erro ao copiar:', err);
     showToast('Não foi possível copiar automaticamente. Selecione o texto na caixa.');
